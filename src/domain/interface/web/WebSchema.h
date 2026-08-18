@@ -6,12 +6,12 @@
 #include <vector>
 
 // ============================================================================
-// WebSchema — the GUI task schema = InvTaskSchema + optional direct-mode
+// WebSchema — the HTTP task schema = InvTaskSchema + optional direct-mode
 // `source` + optional search-config fields.
 //
 // All InvTaskSchema payloads (profile/target/items/algorithm) parse unchanged.
 // Extra fields are optional and never change existing semantics, so a task
-// saved by the GUI loads straight into `besq --input`.
+// saved via the HTTP API loads straight into `besq --input`.
 // ============================================================================
 
 struct WebTaskDto {

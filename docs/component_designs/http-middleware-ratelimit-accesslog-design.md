@@ -114,7 +114,7 @@ std::string client_addr(const HttpRequest& req);
 
 ```cpp
 struct RateLimitConfig {
-    bool enabled = false;            // 默认关闭：现有行为零变化，GUI 显式开启
+    bool enabled = false;            // 默认关闭：现有行为零变化，HTTP 服务（--api serve）显式开启
     double ip_rps = 20;              // 每 IP 补令牌速率（次/秒）
     size_t ip_burst = 40;
     double global_rps = 200;
@@ -194,4 +194,4 @@ Connection::process → 链 → 响应 ← 逐层返回 → Connection 写线
 - `X-Forwarded-For` 之外的代理头（`X-Real-IP` 等）——nginx 默认追加 XFF，够用；
 - 限流阈值热更新（启动期配置；如需运行时调整，走重启或后续 `/api/settings` 通道）；
 - 解析级 400/413 访问日志（需 Connection 日志钩子）；
-- **默认访问日志的策略对齐（Nginx 前置任务内做）**：run() 自动装配的默认访问日志用默认 `ClientAddrPolicy`（不信任 XFF），而限流器经 `trust_forwarded=true` 采信 XFF——部署时两者会分叉（日志记代理 IP、限流 key 记真实客户端）。逃生口已存在（`set_access_log(false)` + `use(make_access_logger(policy))` 自装同策略版），但需手动同步两个旋钮。Nginx 部署任务中应加 `HttpServer::set_access_log_policy(...)` 或让 GUI 装配策略一致的日志器，消除隐性不一致。
+- **默认访问日志的策略对齐（Nginx 前置任务内做）**：run() 自动装配的默认访问日志用默认 `ClientAddrPolicy`（不信任 XFF），而限流器经 `trust_forwarded=true` 采信 XFF——部署时两者会分叉（日志记代理 IP、限流 key 记真实客户端）。逃生口已存在（`set_access_log(false)` + `use(make_access_logger(policy))` 自装同策略版），但需手动同步两个旋钮。Nginx 部署任务中应加 `HttpServer::set_access_log_policy(...)` 或让 HTTP 服务装配策略一致的日志器，消除隐性不一致。

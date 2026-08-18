@@ -12,21 +12,20 @@ namespace {
 /// Current settings snapshot — mirrors the old ApiSettings::handle_get
 /// (field names/shape unchanged; machine format, not localized).  The
 /// writable set is lang / log_level / log_console / log_console_level /
-/// log_retention; the gui_* / memory_mb / sandbox_enabled and the path
+/// log_retention; the http_* / memory_mb / sandbox_enabled and the path
 /// fields (log_dir/algo_dir/state_dir) are read-only (set at startup — the
 /// server is already bound).
 ///
 /// `effective_port` is the actually bound port (WebModule injects it after
 /// server.start(); 0 when not injected, e.g. tests driving the Router
-/// directly).  gui_port prefers it — the configured 0 means "OS auto-assign".
+/// directly).  http_port prefers it — the configured 0 means "OS auto-assign".
 Json build_settings_json(uint16_t effective_port) {
     const auto& cfg = AppConfig::get();
     Json o = Json::object();
     o["lang"] = Json(std::string(LanguageManager::instance().active().name()));
-    o["gui_host"] = Json(cfg.gui_host);
-    o["gui_port"] = Json(static_cast<int64_t>(effective_port != 0 ? effective_port : cfg.gui_port));
-    o["gui_open_browser"] = Json(cfg.gui_open_browser);
-    o["gui_workers"] = Json(static_cast<int64_t>(cfg.gui_workers));
+    o["http_host"] = Json(cfg.http_host);
+    o["http_port"] = Json(static_cast<int64_t>(effective_port != 0 ? effective_port : cfg.http_port));
+    o["http_workers"] = Json(static_cast<int64_t>(cfg.http_workers));
     o["memory_mb"] = Json(cfg.memory_mb);
     o["sandbox_enabled"] = Json(cfg.sandbox_enabled);
     o["log_level"] = Json(static_cast<int64_t>(Logger::instance().get_level()));

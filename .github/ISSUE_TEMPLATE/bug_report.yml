@@ -32,7 +32,7 @@ body:
       label: 入口
       options:
         - CLI（besq）
-        - Web GUI（besq-gui）
+        - HTTP API 服务（besq --api serve）
         - C ABI
         - 插件 / 沙箱
         - 构建 / 测试

@@ -158,7 +158,7 @@ void BesqContext::activate_profile_group(std::vector<std::string> members) {
     if (members.size() > 1)
         (void)_impl->profiles.resolve_effective_group(members);
     // 单值访问器 active_profile() 返回第一个成员（设计 §2.1）：同步 manager
-    // 激活状态，使 GUI/ABI 的 active-profile 展示在组合模式下指向首个成员。
+    // 激活状态，使 HTTP 服务/ABI 的 active-profile 展示在组合模式下指向首个成员。
     if (!members.empty())
         _impl->profiles.activate(members.front());
     _impl->active_group = std::move(members);
@@ -509,7 +509,7 @@ SolveResult BesqContext::solve(const SolveRequest& request) {
         // 耗时三处同源（C1）：取 SolveResult::computation_time_ms（SolvePipeline
         // stage_execute 计时），与任务结果根字段/历史事件口径一致。
         done.computation_ms = result.computation_time_ms;
-        // 完整结果 JSON（C1：历史页方案详情）；与 web 记录点同源——format 即
+        // 完整结果 JSON（C1：历史记录方案详情）；与 web 记录点同源——format 即
         // 任务结果根字段的序列化（CLI/ABI 一致性）。
         done.result_json = format(result, request.mode, "json");
         record_solve_event(done);

@@ -4,7 +4,7 @@
 namespace web {
 
 /// GET /api/fs/list?path= — list one directory (non-recursive) for the
-/// frontend directory picker. The requested path is resolved against the
+/// directory-picker API. The requested path is resolved against the
 /// server's working directory and MUST stay inside it; anything else (missing
 /// target, a file, or an escape above the root) is a 400 INVALID_PATH. The
 /// response is `{"path":…, "root":…, "entries":[{name,is_dir,size},…]}` with

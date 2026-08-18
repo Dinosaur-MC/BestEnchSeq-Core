@@ -121,8 +121,8 @@ void test_conflicting_target_not_solvable() {
 void test_resume_from_checkpoint() {
     // Build a dp_merge checkpoint (small direct-mode input, pre-run so the
     // memo cache is populated), write it to a temp file, then resume it via
-    // BesqContext::solve_from_checkpoint — the full CLI --resume / GUI
-    // restore path: peek → create executor from tag → start(blob) → recall.
+    // BesqContext::solve_from_checkpoint — the full CLI --resume / HTTP
+    // service restore path: peek → create executor from tag → start(blob) → recall.
     // NOTE: compact types are explicitly qualified (business/orchestration
     // expose same-named global types, so `using namespace algorithm` is
     // ambiguous here).

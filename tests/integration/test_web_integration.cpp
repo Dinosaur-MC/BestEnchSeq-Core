@@ -7,24 +7,23 @@
 //   WebModule.dispatch → controllers → bytes back out the same wire.
 //
 // Cases:
-//  1. GET /                      → 307 + Location: /public/index.html
-//  2. GET /public/index.html     → 200 text/html, embedded SPA body
-//  3. GET /health, /api/status, /api/settings → 200 + field assertions
-//  4. GET /api/profiles (+ meta) → profiles/active + full metadata fields
-//  5. POST /api/tasks → 202+task_id+Location → poll to completed+result
-//  5b. Failing task (unknown enchant) → snapshot reaches state=failed+error
+//  1. GET /public/index.html   → 200 text/html, embedded body (static service)
+//  2. GET /health, /api/status, /api/settings → 200 + field assertions
+//  3. GET /api/profiles (+ meta) → profiles/active + full metadata fields
+//  4. POST /api/tasks → 202+task_id+Location → poll to completed+result
+//  4b. Failing task (unknown enchant) → snapshot reaches state=failed+error
 //      (the SSE failed FRAME is deliberately not asserted live — see the
 //      comment in test_task_failed_snapshot; hub-level shape is pinned in
 //      test_web_api)
-//  6. SSE over the real socket   → GET /api/tasks/{id}/events: stream head +
+//  5. SSE over the real socket   → GET /api/tasks/{id}/events: stream head +
 //     a live `event: completed` + `data:` frame (Reactor→Connection→wire)
-//  6b. close-storm SSE regression → 32 rapid connect/close cycles while an SSE
+//  5b. close-storm SSE regression → 32 rapid connect/close cycles while an SSE
 //     stream is open; the completed frame must still arrive within budget
 //     (pins the poller lock-starvation fix, see the case comment)
-//  7. Error envelope             → 404 {error,code}; 405 + Allow
-//  8. Concurrent clients         → 4 threads each GET /health → all 200
-//  9. Path traversal             → GET /public/../secret → 404
-// 10. /api/history               → 普通查询 + 分页（offset/limit）+ 游标（after_seq）
+//  6. Error envelope             → 404 {error,code}; 405 + Allow
+//  7. Concurrent clients         → 4 threads each GET /health → all 200
+//  8. Path traversal             → GET /public/../secret → 404
+//  9. /api/history               → 普通查询 + 分页（offset/limit）+ 游标（after_seq）
 //      + Completed 事件字段完整性；/api/logs* → 404（端点已删，替代原 logs SSE 用例）
 //
 // All waits are bounded loops; nothing can hang the suite indefinitely.
@@ -206,14 +205,9 @@ std::string poll_status_until(HttpServer& server, const std::string& id, const c
 }
 
 // ---------------------------------------------------------------------------
-// Case 1+2: / redirect + /public static asset
+// Case 1: /public static asset (frontend moved out; static service retained)
 // ---------------------------------------------------------------------------
 void test_static_and_root(HttpServer& server) {
-    // GET / → 307 + Location: /public/index.html
-    auto root = http_exchange(server, "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
-    expect(root.find("307") != std::string::npos, "root redirects 307");
-    expect(root.find("Location: /public/index.html") != std::string::npos, "root Location header");
-
     // GET /public/index.html → 200 text/html, embedded body
     auto idx = http_exchange(server, "GET /public/index.html HTTP/1.1\r\nHost: x\r\n\r\n");
     expect(idx.find("200 OK") != std::string::npos, "index serves 200");
@@ -242,12 +236,12 @@ void test_health_status_settings(HttpServer& server) {
     expect(settings.find("lang") != std::string::npos, "settings lang field");
     expect(settings.find("log_level") != std::string::npos, "settings log_level field");
 
-    // C2: with the server bound to port 0 (OS auto-assign), gui_port must be
+    // C2: with the server bound to port 0 (OS auto-assign), http_port must be
     // the ACTUAL bound port (WebModule::set_effective_port → controller), not
     // the configured 0.
     expect(server.port() != 0, "server bound a real (non-zero) port");
-    expect(settings.find("\"gui_port\":" + std::to_string(server.port())) != std::string::npos,
-           "settings gui_port is the real bound port");
+    expect(settings.find("\"http_port\":" + std::to_string(server.port())) != std::string::npos,
+           "settings http_port is the real bound port");
 }
 
 // ---------------------------------------------------------------------------
@@ -849,9 +843,9 @@ void test_solve_does_not_block_profile() {
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Suite: build the in-process stack mirroring besq-gui, then drive it with raw
-// sockets. server is declared after module so it is destroyed first (WebModule
-// dtor ordering invariant).
+// Suite: build the in-process stack mirroring `besq --api serve` (main.cpp),
+// then drive it with raw sockets. server is declared after module so it is
+// destroyed first (WebModule dtor ordering invariant).
 // ---------------------------------------------------------------------------
 static void run_suite() {
     BesqContext ctx;
@@ -866,9 +860,9 @@ static void run_suite() {
     HttpServer server;
     server.set_fallback([&](const HttpRequest& r) { return module.dispatch(r); });
     expect(server.start("127.0.0.1", 0), "server starts");
-    // C2: real binding — the settings page must show the actually bound port
+    // C2: real binding — the service must report the actually bound port
     // (port 0 = OS auto-assign; HttpServer::port() resolves it post-bind),
-    // mirroring src/gui/main.cpp.
+    // mirroring the serve mode in src/main.cpp.
     module.set_effective_port(server.port());
     std::thread server_thread([&] { server.run(); });
 

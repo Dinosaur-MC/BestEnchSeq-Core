@@ -890,12 +890,12 @@ TEST_CASE("test_detect_target") {
         expect_eq(CLIApp::detect_target(1, const_cast<char**>(argv)), std::string("cli"), "detect_target: default is cli");
     }
     {
-        const char* argv[] = {"besq", "--api", "gui"};
-        expect_eq(CLIApp::detect_target(3, const_cast<char**>(argv)), std::string("gui"), "detect_target: --api gui");
+        const char* argv[] = {"besq", "--api", "serve"};
+        expect_eq(CLIApp::detect_target(3, const_cast<char**>(argv)), std::string("serve"), "detect_target: --api serve");
     }
     {
-        const char* argv[] = {"besq", "--api", "gui", "--target", "diamond_sword"};
-        expect_eq(CLIApp::detect_target(5, const_cast<char**>(argv)), std::string("gui"),
+        const char* argv[] = {"besq", "--api", "serve", "--port", "8080"};
+        expect_eq(CLIApp::detect_target(5, const_cast<char**>(argv)), std::string("serve"),
                   "detect_target: --api found anywhere");
     }
     TEST_PASS("CLIApp detect_target");

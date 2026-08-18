@@ -103,7 +103,6 @@ option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
 option(BESQ_DEEP_DIAGNOSTICS "Enable per-operation diagnostic counters (profiling builds; default off = zero hot-path cost)" OFF)
 option(BESQ_BUILD_CLI "Build the besq CLI executable" ON)
 option(BESQ_BUILD_SANDBOX "Build the besq-worker sandbox executable (algorithm sandboxing for third-party plugins)" OFF)
-option(BESQ_BUILD_GUI "Build the besq-gui Web GUI executable" OFF)
 option(BUILD_TESTING "Build test targets" ON)
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
 set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution (presets override this)")
@@ -127,7 +126,7 @@ configure_file(
 #   - shared header  ${BESQ_GENERATED_DIR}/builtin/EmbeddedResources_generated.h
 #     (enum class ResourceId + constexpr raw()/resource_name()/group_of())
 #   - one implementation per group, compiled into the group's target
-#     (data → besq-core, frontend → besq-gui; other groups return empty views)
+#     (data → besq-core; other groups return empty views)
 # See cmake/EmbedResource.cmake for the API and validation rules.
 include(${CMAKE_SOURCE_DIR}/cmake/EmbedResource.cmake)
 
@@ -254,66 +253,6 @@ if(BESQ_BUILD_SANDBOX)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# besq-gui (guarded by BESQ_BUILD_GUI) — Web GUI host (browser host, v1; WebView2 future work)
-# ═══════════════════════════════════════════════════════════════════════════════
-if(BESQ_BUILD_GUI)
-    # Embedded frontend assets (single-exe distribution): declared once in the
-    # frontend resource group below — the generator emits the shared enum +
-    # frontend_assets.cpp (compiled into besq-gui).  The kAssets URL table in
-    # src/gui/main.cpp maps URLs to ResourceId members and MUST stay in sync
-    # with the member names declared here.
-    set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
-    # 图标只嵌 sprite sheet 单图（前端按 sprite.js 定位裁剪）；
-    # 源图 assets/item_icons/，重生成: python3 scripts/gen_sprite.py
-
-    add_executable(besq-gui
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/main.cpp
-    )
-    # Frontend resource group.  The implementation is compiled into
-    # besq-domain-business (same archive as the data group): the inline
-    # raw() dispatcher references EVERY group's accessor at every call site
-    # (no dead-branch elimination in Debug), so all definitions must live in
-    # a library every consumer links — otherwise CLI/GUI would need separate
-    # frontend_raw/data_raw definitions and statically collide.
-    besq_embed_resources(
-        GROUPS
-            frontend besq-domain-business
-        RESOURCES
-            frontend_index_html=${GUI_FRONTEND}/index.html
-            frontend_styles_css=${GUI_FRONTEND}/styles.css
-            frontend_app_js=${GUI_FRONTEND}/app.js
-            frontend_api_js=${GUI_FRONTEND}/api.js
-            frontend_i18n_js=${GUI_FRONTEND}/i18n.js
-            frontend_names_zh_js=${GUI_FRONTEND}/names_zh.js
-            frontend_sprite_js=${GUI_FRONTEND}/sprite.js
-            frontend_vendor_icons_sprite_png=${GUI_FRONTEND}/vendor/icons/sprite.png
-            frontend_vendor_mdui_mdui_css=${GUI_FRONTEND}/vendor/mdui/mdui.css
-            frontend_vendor_mdui_mdui_global_js=${GUI_FRONTEND}/vendor/mdui/mdui.global.js
-            frontend_view_calculator=${GUI_FRONTEND}/views/calculator.js
-            frontend_view_profiles=${GUI_FRONTEND}/views/profiles.js
-            frontend_view_algorithms=${GUI_FRONTEND}/views/algorithms.js
-            frontend_view_history=${GUI_FRONTEND}/views/history.js
-            frontend_view_settings=${GUI_FRONTEND}/views/settings.js
-            frontend_view_status=${GUI_FRONTEND}/views/status.js
-            frontend_view_pager=${GUI_FRONTEND}/views/pager.js
-    )
-    # Left-to-right static resolution (no --start-group): interface first,
-    # then the core aggregate — see the besq target above.
-    target_link_libraries(besq-gui PRIVATE
-        besq-domain-interface
-        besq-core
-    )
-    target_include_directories(besq-gui PRIVATE
-        ${BESQ_GENERATED_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_compile_definitions(besq-gui PRIVATE
-        $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-        $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
-    )
-endif()
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Install rules
 # ═══════════════════════════════════════════════════════════════════════════════
 include(GNUInstallDirs)
@@ -328,12 +267,6 @@ endif()
 
 if(BESQ_BUILD_SANDBOX)
     install(TARGETS besq-worker
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-endif()
-
-if(BESQ_BUILD_GUI)
-    install(TARGETS besq-gui
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif()

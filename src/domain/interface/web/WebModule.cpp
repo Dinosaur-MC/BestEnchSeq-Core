@@ -74,14 +74,9 @@ void WebModule::set_effective_port(uint16_t port) noexcept {
 }
 
 HttpResponse WebModule::dispatch(const HttpRequest& req) {
-    // `/` → SPA 入口重定向。
-    if (req.path == "/") {
-        HttpResponse r = HttpResponse::json(307, "Temporary Redirect", "");
-        r.headers.emplace_back("Location", "/public/index.html");
-        return r;
-    }
-    // `/public/*` → 静态资源（嵌入式优先，磁盘兜底）。条件请求（If-None-Match
-    // → ETag 304）由 StaticFileServer 处理，这里把请求头透传过去。
+    // `/public/*` → 静态资源（嵌入式优先，磁盘兜底——前端已迁出独立项目，
+    // 服务侧仅保留静态能力供后续按需使用）。条件请求（If-None-Match → ETag
+    // 304）由 StaticFileServer 处理，这里把请求头透传过去。
     if (req.path.rfind("/public", 0) == 0)
         return _impl->_sfs.serve(req.method, req.path, req.header("If-None-Match"));
     // 其余 → 控制器路由（/health, /api/*）。

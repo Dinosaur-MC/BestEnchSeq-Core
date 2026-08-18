@@ -16,10 +16,11 @@ namespace web {
 ///
 /// Assembles all modern controllers (health/status/settings/profiles/algorithm/
 /// calculator/fs/history) onto one `web::Router`, plus the StaticFileServer for
-/// `/public` (embedded + optional disk root), plus a session-owned SseHub that
-/// the calculator SSE events handler subscribes to. Errors map to
-/// `{ok:false,error}` envelopes with the status codes from the design spec:
-/// 400 input / 404 unknown / 409 conflict / 500 internal.
+/// `/public` (embedded + optional disk root; the SPA frontend moved to a
+/// separate project — this capability is kept for future static access), plus
+/// a session-owned SseHub that the calculator SSE events handler subscribes
+/// to. Errors map to `{ok:false,error}` envelopes with the status codes from
+/// the design spec: 400 input / 404 unknown / 409 conflict / 500 internal.
 class WebModule {
 public:
     explicit WebModule(BesqContext& ctx);
@@ -33,14 +34,14 @@ public:
     WebModule(const WebModule&) = delete;
     WebModule& operator=(const WebModule&) = delete;
 
-    /// Inject the SPA assets (path → resource), mounted under `/public`.
+    /// Inject static resources (path → resource), mounted under `/public`.
     void set_static_resources(std::map<std::string, StaticResource> embedded);
     /// Mount a disk root as a `/public` fallback (dev hot-reload); optional.
     void mount_res_dir(std::filesystem::path root);
 
     /// 回填实际绑定端口（HttpServer::port()——配置 0 = OS 自动分配，绑定后
-    /// >0）。GET /api/settings 的 gui_port 用它覆盖配置值，设置页显示真实
-    /// 端口。须在 server.start() 成功后、任何请求到达前调用（main.cpp）。
+    /// >0）。GET /api/settings 的 http_port 用它覆盖配置值。须在
+    /// server.start() 成功后、任何请求到达前调用（main.cpp serve 模式）。
     void set_effective_port(uint16_t port) noexcept;
 
     /// Dispatch one HTTP request. Never throws; returns a response

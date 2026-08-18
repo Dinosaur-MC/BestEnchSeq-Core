@@ -30,7 +30,7 @@ public:
     /// Inspect a checkpoint blob without constructing an executor: validates
     /// magic/version/CRC and returns the checkpoint's MetaHeader, whose
     /// algorithm_tag names the algorithm that wrote it.  The resume flow
-    /// (CLI --resume / GUI restore) uses it to create the right executor,
+    /// (CLI --resume / HTTP service restore) uses it to create the right executor,
     /// then calls start(blob) to restore the computation.
     /// Returns a MetaHeader with an EMPTY algorithm_tag when the blob is not
     /// a valid checkpoint — callers must check before use.

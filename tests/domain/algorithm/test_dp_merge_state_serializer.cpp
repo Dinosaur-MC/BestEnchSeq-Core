@@ -170,7 +170,7 @@ TEST_CASE("test_dp_merge_populated_cache_roundtrip") {
 
 // ─── IExecutor::peek / extract_input / file roundtrip ────────────────────
 //
-// The resume flow (CLI --resume / GUI restore) inspects a checkpoint blob
+// The resume flow (CLI --resume / HTTP service restore) inspects a checkpoint blob
 // WITHOUT an executor: IExecutor::peek validates it and returns the stamped
 // algorithm tag (used to create the executor), and
 // IAlgorithmSerializer::extract_input reads the input section out for

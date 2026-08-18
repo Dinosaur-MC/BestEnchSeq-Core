@@ -21,7 +21,7 @@ public:
 
     /// Extract JUST the input section from a checkpoint blob — no algorithm
     /// instance and no algorithm-state restoration needed.  The resume flow
-    /// (CLI --resume / GUI restore) uses it to obtain the AlgorithmInput for
+    /// (CLI --resume / HTTP service restore) uses it to obtain the AlgorithmInput for
     /// CompactAdapter::recall after start(checkpoint) has finished, without
     /// exposing executor internals.  Returns false on any validation failure.
     static bool extract_input(std::span<const uint8_t> data, AlgorithmInput& out);

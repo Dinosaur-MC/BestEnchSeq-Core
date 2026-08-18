@@ -20,7 +20,7 @@ BestEnchSeq-Core 是 **BestEnchSeq 最佳附魔顺序计算器的 Core 版本**�
 - **可插拔算法**：内建 `dp_merge` / `bb_dp` / `hamming`；插件热加载 `astar` / `dfs` / `idastar` / `diff_first` / `penalty_balance`
 - **沙箱隔离**（`BESQ_SANDBOX=1`）：第三方插件在 `besq-worker` 子进程中运行，父进程绝不 `dlopen`；ELF/PE 静态审计（W^X、危险符号）
 - **异步执行**：暂停/恢复/取消 + 流式进度 + 二进制 checkpoint（断点续跑）
-- **三种交互面**：CLI（`besq`）、C ABI（`include/besq/besq.h`）、本地 Web GUI（`besq-gui`，REST + SSE）
+- **三种交互面**：CLI（`besq`）、C ABI（`include/besq/besq.h`）、HTTP API 服务（`besq --api serve`，REST + SSE；前端为独立项目）
 - **i18n**：内置 en_US / zh_CN，`--lang` > `BESQ_LANG` > 系统 locale 三级选择
 - **C++ 核心零第三方依赖**：自研 HTTP 服务器、JSON DOM、日志、i18n、并发队列
 
@@ -94,31 +94,28 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 二进制 checkpoint 保存算法暂停时的完整求解状态（input + 搜索状态），可从断点恢复计算：
 
 ```bash
-# GUI：暂停任务 → POST /api/tasks/{id}/checkpoint 手动保存到 <exe_dir>/states/
+# HTTP 服务：暂停任务 → POST /api/tasks/{id}/checkpoint 手动保存到 <exe_dir>/states/
 #      （BESQ_STATE_DIR 覆盖；BESQ_STATE_AUTOSAVE=1 可在暂停时自动保存）
 # 从断点恢复（自包含：无需 --target/--source；与 --target/--input 互斥）
 ./build/bin/besq --resume <exe_dir>/states/task-3.ckpt
-# GUI 恢复端点：POST /api/checkpoints/restore {"path": "<ckpt>"}；GET /api/checkpoints 列出
+# HTTP 恢复端点：POST /api/checkpoints/restore {"path": "<ckpt>"}；GET /api/checkpoints 列出
 ```
 
 > 运行时默认路径（profiles/、logs/、states/、config.json）全部基于**可执行文件所在目录**（`common/utils/ExeDir.hpp`），与启动 CWD 无关；`--profile-dir` / `BESQ_*` 显式指定照常覆盖。
 
 完整的 CLI 选项见 `besq --help`（按分组渲染）。
 
-## Web GUI（`besq-gui`）
+## HTTP API 服务（`besq --api serve`）
 
-面向玩家的本地 Web GUI，与 CLI 共享同一核心（REST API + SSE 事件流）。构建需开启 `BESQ_BUILD_GUI=ON`。
+前端已迁出独立项目；本仓库保留 HTTP 服务，由同一 `besq` 可执行文件启动，与 CLI 共享同一核心（REST API + SSE 事件流）。
 
 ```bash
-# 构建
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBESQ_BUILD_GUI=ON
-cmake --build build --target besq-gui
+# 运行（默认 127.0.0.1 + OS 自动分配端口）
+./build/bin/besq --api serve
 
-# 运行（默认 127.0.0.1 + OS 自动分配端口；--browser 自动打开浏览器）
-./build/bin/besq-gui --browser
-
-# 开发模式：SPA 从磁盘热重载
-BESQ_GUI_PORT=8765 ./build/bin/besq-gui --frontend-dir gui/frontend
+# 指定端口 / 线程数 / /public 磁盘根
+./build/bin/besq --api serve --port 8765 --workers 4 --res-dir ./public
+# 等价环境变量：BESQ_HTTP_PORT / BESQ_HTTP_WORKERS / BESQ_HTTP_RES_DIR
 ```
 
 | 控制器 | 端点（节选） |
@@ -151,12 +148,12 @@ SSE 事件流：`GET /api/tasks/{id}/events`（`progress` / `diag` / `completed`
 
 ## 架构
 
-四域单向分层 + 共享工具层，三个构建产物（`besq` / `besq-gui` / `besq-worker`）共享同一核心：
+四域单向分层 + 共享工具层，两个构建产物（`besq` / `besq-worker`）共享同一核心（HTTP 服务由 `besq --api serve` 提供）：
 
 ![BestEnchSeq-Core 架构](docs/diagrams/architecture-zh.svg)
 
 ```
-CLI / GUI → BesqContext（会话门面）
+CLI / HTTP 服务 → BesqContext（会话门面）
   → 编排管线（Solve / Manage / Export）
   → CompactAdapter::apply()（业务 → 紧凑类型，裁剪 EnchReg）
   → IExecutor（AlgorithmExecutor | SandboxedExecutor）→ IAlgorithm
@@ -187,11 +184,10 @@ CLI / GUI → BesqContext（会话门面）
 | `BESQ_LANG` | 界面语言（en_US / zh_CN），`--lang` 优先 |
 | `BESQ_SANDBOX=1` | 插件沙箱隔离（`besq-worker` 子进程） |
 | `BESQ_WORKER_PATH` | 覆盖 worker 路径（默认 `<exe_dir>/besq-worker[.exe]`，再查 PATH） |
-| `BESQ_GUI_HOST` | GUI 监听地址（默认 `127.0.0.1`） |
-| `BESQ_GUI_PORT` | GUI 端口（默认 `0` = OS 自动分配） |
-| `BESQ_GUI_OPEN_BROWSER` | 启动时自动打开浏览器 |
-| `BESQ_GUI_WORKERS` | HTTP 消费线程数（默认 2） |
-| `BESQ_GUI_RES_DIR` | `/public` 磁盘兜底根（开发热重载） |
+| `BESQ_HTTP_HOST` | HTTP 服务监听地址（默认 `127.0.0.1`） |
+| `BESQ_HTTP_PORT` | HTTP 服务端口（默认 `0` = OS 自动分配） |
+| `BESQ_HTTP_WORKERS` | HTTP 消费线程数（默认 2） |
+| `BESQ_HTTP_RES_DIR` | `/public` 磁盘根（默认不挂载） |
 
 ## 测试与基准
 
@@ -220,9 +216,6 @@ cmake --build build --target forge_benchmark
 | `scripts/evaluate.sh` | WSL 评估：Valgrind 泄漏检测、Callgrind/Massif/CacheGrind 分析、benchmark |
 | `scripts/bench_report.py` | benchmark 结果解析 + 趋势图 |
 | `scripts/get_vanilla_data.py` / `download_mc_lang.py` | 从 MC 客户端 jar 提取魔咒/装备数据与官方语言表（`scripts/vanilla/` 包） |
-| `scripts/gen_frontend_icons.py` | 从 vanilla 材质包生成物品图标源（`assets/item_icons/`） |
-| `scripts/gen_sprite.py` | 聚合图标源 → sprite sheet + 前端索引（`gui/frontend/vendor/icons/sprite.png`） |
-| `scripts/gen_names_zh.py` | 生成前端中文名映射（`gui/frontend/names_zh.js`） |
 | `scripts/gen_modded_profile.py` | 生成基准测试 mod profile（`data/tests/profiles/modded_sword.json`） |
 | `scripts/parse_callgrind.py` / `parse_massif.py` / `parse_cachegrind.py` | 分析输出解析 |
 

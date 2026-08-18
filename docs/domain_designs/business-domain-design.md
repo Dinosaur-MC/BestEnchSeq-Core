@@ -744,7 +744,7 @@ Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `TagRegistry`) keep 
 | File | Reason |
 |------|--------|
 | `business/loaders/BuiltinData.h/cpp` | 内建数据加载（原 builtin/DataLoader 迁入）；raw 字节来自 `builtin` 统一访问器 |
-| `builtin/EmbeddedData.h` + `FrontendAssets.h` | 嵌入资源壳头（内容由 CMake `besq_embed_resources()` 自动生成，零项目内依赖） |
+| `builtin/EmbeddedData.h` | 嵌入资源壳头（内容由 CMake `besq_embed_resources()` 自动生成，零项目内依赖） |
 | `business/registries/IRegistry.h` | Core registry template — unchanged |
 | `business/registries/EnchantmentRegistry.h/cpp` | Core registry — unchanged |
 | `business/registries/EquipmentRegistry.h/cpp` | Core registry — unchanged |

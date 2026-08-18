@@ -20,7 +20,7 @@ The project is **data-driven**: built-in vanilla data tables, plus custom JSON/C
 - **Pluggable algorithms**: built-in `dp_merge` / `bb_dp` / `hamming`; hot-loaded plugins `astar` / `dfs` / `idastar` / `diff_first` / `penalty_balance`
 - **Sandbox isolation** (`BESQ_SANDBOX=1`): third-party plugins run inside a `besq-worker` subprocess; the parent never `dlopen`s; static ELF/PE audit (W^X, dangerous symbols)
 - **Asynchronous execution**: pause/resume/cancel + streaming progress + binary checkpoints (resume from pause)
-- **Three interfaces**: CLI (`besq`), C ABI (`include/besq/besq.h`), and a local Web GUI (`besq-gui`, REST + SSE)
+- **Three interfaces**: CLI (`besq`), C ABI (`include/besq/besq.h`), and an HTTP API service (`besq --api serve`, REST + SSE; the frontend is a separate project)
 - **i18n**: built-in en_US / zh_CN; `--lang` > `BESQ_LANG` > system locale
 - **Zero third-party dependencies in the C++ core**: self-built HTTP server, JSON DOM, logger, i18n, concurrent queues
 
@@ -91,20 +91,17 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 
 Run `besq --help` for the complete, grouped CLI reference.
 
-## Web GUI (`besq-gui`)
+## HTTP API Service (`besq --api serve`)
 
-A player-facing local Web GUI over the same core (REST API + SSE event streams). Build with `BESQ_BUILD_GUI=ON`.
+The frontend moved to a separate project; this repository keeps the HTTP service, launched from the same `besq` executable over the same core (REST API + SSE event streams).
 
 ```bash
-# Build
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBESQ_BUILD_GUI=ON
-cmake --build build --target besq-gui
+# Run (default 127.0.0.1 + OS-assigned port)
+./build/bin/besq --api serve
 
-# Run (default 127.0.0.1 + OS-assigned port; --browser opens the browser)
-./build/bin/besq-gui --browser
-
-# Dev mode: SPA hot-reload from disk
-BESQ_GUI_PORT=8765 ./build/bin/besq-gui --frontend-dir gui/frontend
+# Port / workers / /public disk root
+./build/bin/besq --api serve --port 8765 --workers 4 --res-dir ./public
+# Equivalent env vars: BESQ_HTTP_PORT / BESQ_HTTP_WORKERS / BESQ_HTTP_RES_DIR
 ```
 
 | Controller | Endpoints (excerpt) |
@@ -137,12 +134,12 @@ New algorithms only need to implement `IAlgorithm::execute()` to gain thread man
 
 ## Architecture
 
-Four-domain one-way layering on top of shared utilities. Three artifacts (`besq` / `besq-gui` / `besq-worker`) share the same core:
+Four-domain one-way layering on top of shared utilities. Two artifacts (`besq` / `besq-worker`) share the same core (the HTTP service runs as `besq --api serve`):
 
 ![BestEnchSeq-Core architecture](docs/diagrams/architecture-en.svg)
 
 ```
-CLI / GUI → BesqContext (session facade)
+CLI / HTTP service → BesqContext (session facade)
   → Orchestration pipelines (Solve / Manage / Export)
   → CompactAdapter::apply() (business → compact types, EnchReg pruning)
   → IExecutor (AlgorithmExecutor | SandboxedExecutor) → IAlgorithm
@@ -173,11 +170,10 @@ Directory layout and per-domain design details: [docs/architecture-overview.md](
 | `BESQ_LANG` | Interface language (en_US / zh_CN); `--lang` wins |
 | `BESQ_SANDBOX=1` | Sandbox plugin isolation (`besq-worker` subprocess) |
 | `BESQ_WORKER_PATH` | Override the worker path (default `<exe_dir>/besq-worker[.exe]`, then PATH) |
-| `BESQ_GUI_HOST` | GUI bind address (default `127.0.0.1`) |
-| `BESQ_GUI_PORT` | GUI port (default `0` = OS-assigned) |
-| `BESQ_GUI_OPEN_BROWSER` | Open the browser on startup |
-| `BESQ_GUI_WORKERS` | HTTP consumer threads (default 2) |
-| `BESQ_GUI_RES_DIR` | `/public` disk fallback root (dev hot-reload) |
+| `BESQ_HTTP_HOST` | HTTP service bind address (default `127.0.0.1`) |
+| `BESQ_HTTP_PORT` | HTTP service port (default `0` = OS-assigned) |
+| `BESQ_HTTP_WORKERS` | HTTP consumer threads (default 2) |
+| `BESQ_HTTP_RES_DIR` | `/public` disk root (not mounted by default) |
 
 ## Tests & Benchmarks
 
@@ -206,9 +202,6 @@ cmake --build build --target forge_benchmark
 | `scripts/evaluate.sh` | WSL evaluation: Valgrind leak checks, Callgrind/Massif/CacheGrind profiling, benchmarks |
 | `scripts/bench_report.py` | Benchmark result parsing + trend charts |
 | `scripts/get_vanilla_data.py` / `download_mc_lang.py` | Extract enchantment/equipment data and official locale from the MC client jar (`scripts/vanilla/` package) |
-| `scripts/gen_frontend_icons.py` | Generate item icon sources from the vanilla texture pack (`assets/item_icons/`) |
-| `scripts/gen_sprite.py` | Aggregate icon sources into the sprite sheet + frontend index (`gui/frontend/vendor/icons/sprite.png`) |
-| `scripts/gen_names_zh.py` | Generate the frontend Chinese-name map (`gui/frontend/names_zh.js`) |
 | `scripts/gen_modded_profile.py` | Generate the benchmark mod profile (`data/tests/profiles/modded_sword.json`) |
 | `scripts/parse_callgrind.py` / `parse_massif.py` / `parse_cachegrind.py` | Profiler output parsers |
 

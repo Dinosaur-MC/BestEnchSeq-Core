@@ -2,7 +2,7 @@ name: Release CI
 
 # 推送新的 v 前缀 tag（如 v1.2.3）时自动构建 + 测试。
 # 宿主侧直接走 CMakePresets.json 的 `full` preset（Release + clang +
-# CLI/Sandbox/GUI + tests + benchmarks），再构建插件（插件用例依赖插件树
+# CLI/Sandbox + tests + benchmarks），再构建插件（插件用例依赖插件树
 # + worker，两者齐备故不会 SKIP）。
 
 on:
@@ -35,7 +35,7 @@ jobs:
           cmake --preset full
           -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
 
-      - name: Build host (besq / besq-gui / besq-worker / tests / benchmarks)
+      - name: Build host (besq / besq-worker / tests / benchmarks)
         run: cmake --build --preset full -j$(nproc)
 
       # 插件构建类型与编译器必须与宿主一致（不匹配会链接失败）；

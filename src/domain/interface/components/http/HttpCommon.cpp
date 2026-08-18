@@ -159,7 +159,7 @@ std::string HttpResponse::to_bytes(bool keep_alive) const {
         // 连接保持打开直到客户端断开或服务端关闭（EventSource 标准行为）。
         // Connection::flush_stream 在此头后直接写原始 SSE 帧（非 chunk 编码），
         // 浏览器 EventSource 按 open-ended text/event-stream 正确解析，不会
-        // 因等待 chunk 帧而卡住（旧的 chunked 声明 + 裸帧组合会让 GUI 静默退化为轮询）。
+        // 因等待 chunk 帧而卡住（旧的 chunked 声明 + 裸帧组合会让前端静默退化为轮询）。
         for (const auto& [k, v] : headers) {
             out += k;
             out += ": ";

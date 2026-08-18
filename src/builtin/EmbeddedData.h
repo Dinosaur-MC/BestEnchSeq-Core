@@ -10,6 +10,6 @@
 //
 // 新增/修改/删除资源：只编辑 CMakeLists.txt 中的 besq_embed_resources 声明，
 // 重新 configure 后生成物自动更新——不要手工改生成物。
-// 组前缀（data_ / frontend_）防跨组撞 ID；生成器在 configure 期拒绝重复成员。
+// 组前缀（data_ / …）防跨组撞 ID；生成器在 configure 期拒绝重复成员。
 // ────────────────────────────────────────────────────────────────────────────
 #include "builtin/EmbeddedResources_generated.h" // IWYU pragma: export

@@ -160,7 +160,7 @@ if(GEN_HEADER)
         "namespace besq::data {${_NL}"
         "${_NL}"
         "/// Embedded-resource ids.  Members carry their group prefix${_NL}"
-        "/// (data_ / frontend_ / ...); the generator rejects duplicate or${_NL}"
+        "/// (e.g. data_vanilla_json); the generator rejects duplicate or${_NL}"
         "/// ungrouped names at configure time.${_NL}"
         "enum class ResourceId {${_NL}"
         "${_enum}"

@@ -14,7 +14,7 @@ Json Solution::EnchStep::to_json() const {
         .set("item_b", item_b.to_json())
         .set("exp_level_cost", exp_level_cost)
         .set("exp_cost", exp_cost);
-    // 条件发射：result 为空（id 空且无附魔——与前端 itemEmpty 同语义）时省略
+    // 条件发射：result 为空（id 空且无附魔——空物品语义）时省略
     // result 键。无条件发射会把空 Item{} 序列化为 {"id":"",...}，from_json
     // 再经 Item::from_json → NSID("") 抛异常，round-trip 断裂（4 参构造
     // EnchStep{a,b,cost,level} 的调用点 result 默认空）。

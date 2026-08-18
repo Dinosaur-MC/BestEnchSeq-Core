@@ -28,8 +28,9 @@ struct AutoLoadResult {
 };
 
 /// Domain-wide auto-load pipeline: the single startup entry point for both
-/// CLI and GUI.  Load order is BUILT-IN FIRST, EXTERNAL SECOND — the conflict
-/// rules of each resource type are already enforced by its own loader:
+/// CLI and the HTTP service.  Load order is BUILT-IN FIRST, EXTERNAL SECOND —
+/// the conflict rules of each resource type are already enforced by its own
+/// loader:
 ///   • profiles:   ProfileManager::load_directory — same key REPLACES the old
 ///                 profile (replace-on-conflict)
 ///   • algorithms: AlgorithmLoader::scan_and_load — a later plugin with the

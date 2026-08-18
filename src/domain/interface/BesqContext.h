@@ -107,7 +107,7 @@ public:
     void load_file(const std::string& path);
     void load_data(const std::vector<std::string>& filters);
 
-    /// Domain-wide auto-load (the CLI/GUI startup entry): built-in data
+    /// Domain-wide auto-load (the CLI / HTTP service startup entry): built-in
     /// first, then external profiles / algorithm plugins / on-disk languages
     /// — order + conflict rules are owned by orchestration::AutoLoadPipeline
     /// (profiles replace-on-conflict, algorithms new-version-wins, langs
@@ -256,7 +256,7 @@ public:
     /// Serialize the paused in-flight solve into \p path (a binary checkpoint
     /// blob).  Valid only while the solve is Paused — serialize_state() waits
     /// for algorithm quiescence; non-serializable algorithms or an empty blob
-    /// return false.  Callers pick the file (GUI endpoint / CLI tooling).
+    /// return false.  Callers pick the file (HTTP endpoint / CLI tooling).
     bool save_solve_state(const std::string& path);
 
     /// Result of solve_from_checkpoint: the solve result plus the algorithm
@@ -266,8 +266,8 @@ public:
         AlgorithmMode mode;
     };
 
-    /// Resume a computation from a checkpoint file (CLI --resume / GUI
-    /// restore endpoint).  Reads the blob, peeks its algorithm tag via
+    /// Resume a computation from a checkpoint file (CLI --resume / HTTP
+    /// service restore endpoint).  Reads the blob, peeks its algorithm tag via
     /// IExecutor::peek, creates the executor and calls start(blob) — no
     /// target/source re-specification needed.  Publishes the active executor
     /// handle during the run (abort/pause work as for solve()).  Throws on

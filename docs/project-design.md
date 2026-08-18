@@ -251,7 +251,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 **职责边界**：只负责嵌入资源的收集（编译期嵌入）与 raw data 访问（`std::string_view`）；不做解析、不做 I/O、零项目内依赖。所有解析/加载/注册逻辑归属各自领域层。
 
-- `EmbeddedData.h` / `FrontendAssets.h`：手写壳头，转发到自动生成的 `builtin/EmbeddedResources_generated.h`（统一枚举 `ResourceId` + `raw()` / `resource_name()` / `group_of()`）
+- `EmbeddedData.h`：手写壳头，转发到自动生成的 `builtin/EmbeddedResources_generated.h`（统一枚举 `ResourceId` + `raw()` / `resource_name()` / `group_of()`）
 - 生成物（`build/generated/builtin/`）：枚举与接口头、每资源 constexpr 字节数组 TU、组级分派 TU——全部由 CMake `besq_embed_resources()` 声明自动生成（单一事实源 = CMakeLists.txt）
 - 加载侧对应物（已迁出 builtin）：`BuiltinData`（business/loaders）、`ItemProperties`（business/components）、`BuiltinI18n`（interface/components）
 

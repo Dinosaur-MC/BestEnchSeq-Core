@@ -9,12 +9,11 @@
 
 C++20 实现的 Minecraft 附魔锻造序列规划器：给定**目标**（`--target`，期望最终附魔）与**起点**（`--source` 源附魔或库存物品），搜索成本最优的附魔书锻造顺序，并输出逐步锻造方案。约束包括铁砧惩罚（prior work penalty）、魔咒冲突、装备适用性（tag）、平台差异（Java/Bedrock）、Too Expensive 上限（39 级）等。
 
-三个构建产物共享同一核心：
+两个构建产物共享同一核心（HTTP 服务由 `besq --api serve` 提供；前端已迁出独立项目）：
 
 | 产物 | 门控 | 用途 |
 |---|---|---|
-| `besq` | 默认 | 命令行工具（CLI + C ABI） |
-| `besq-gui` | `BESQ_BUILD_GUI=ON` | 本地 Web GUI（REST API + SSE，浏览器访问） |
+| `besq` | 默认 | 命令行工具（CLI + C ABI + `--api serve` HTTP 服务） |
 | `besq-worker` | `BESQ_BUILD_SANDBOX=ON` | 沙箱子进程，承载第三方插件算法的隔离执行 |
 
 核心卖点：**数据驱动**（vanilla/mod 数据表、MC 官方 datapack、Profile 依赖体系）、**算法可插拔**（内建 + 插件热加载 + 审计/沙箱）、**零第三方依赖**（纯标准库 + 自研 HTTP/JSON/i18n/并发组件）。
@@ -41,7 +40,7 @@ cmake --build build --target forge_benchmark
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 宿主（hosts）: besq (CLI) · besq-gui (Web GUI) · besq-worker (沙箱)  │
+│ 宿主（hosts）: besq (CLI · HTTP 服务 --api serve) · besq-worker (沙箱) │
 └───────────────┬─────────────────────────────────────────────────────┘
                 ▼
   ┌───────────────────────────────────────────────┐
@@ -62,7 +61,7 @@ cmake --build build --target forge_benchmark
   │ core · io · log · i18n · cli · thread          │
   │ ds/（header-only schema 引擎）                  │
   └───────────────────────────────────────────────┘
-  builtin/（嵌入资源壳层：vanilla.json / item_properties / i18n / 前端资产，编译期嵌入，
+  builtin/（嵌入资源壳层：vanilla.json / item_properties / i18n，编译期嵌入，
            由 CMake besq_embed_resources() 自动生成，零项目内依赖）
 ```
 
@@ -76,13 +75,13 @@ cmake --build build --target forge_benchmark
 | `domain/orchestration/` | `orchestration::` | Solve/Manage/Export 管线、CompactAdapter、OutputFormatter | algorithm、business、common | interface |
 | `domain/interface/` | `::` | BesqContext、CLIApp、C ABI、HTTP 框架、Web 模块 | orchestration、business、algorithm（诊断）、common | — |
 
-> `builtin/` 是纯资源壳层：只含转发壳头（`EmbeddedData.h`/`FrontendAssets.h`）与 CMake 生成的编译期嵌入物（枚举 + constexpr 字节数组 + 访问器），零项目内依赖。数据加载（`BuiltinData`）、属性解析（`ItemProperties`）、i18n 注册（`BuiltinI18n`）均已迁入各自领域层，**business↔builtin 循环已消除**，UNIX 链接不再需要 `--start-group`（归档自洽，左到右解析）。
+> `builtin/` 是纯资源壳层：只含转发壳头（`EmbeddedData.h`）与 CMake 生成的编译期嵌入物（枚举 + constexpr 字节数组 + 访问器），零项目内依赖。数据加载（`BuiltinData`）、属性解析（`ItemProperties`）、i18n 注册（`BuiltinI18n`）均已迁入各自领域层，**business↔builtin 循环已消除**，UNIX 链接不再需要 `--start-group`（归档自洽，左到右解析）。
 
 ### 构建产物与"共享内核"原则
 
 - **`besq-algo-core` 是 SHARED 库**，且是全项目唯一进程内副本：CLI、`besq-worker`、插件三方链接同一份 `.dll/.so`，保证 `IAlgorithm` vtable、`DiagnosticsService` 单例、堆分配器唯一（历史上"静态内核 + -rdynamic"方案在 dlopen 时 SEGV，已弃用）。
 - **`besq-common-log` 也是 SHARED**：Logger 单例每进程必须一份。
-- `besq-core` 是 STATIC 聚合（algorithm + business + orchestration + 锚点 TU），接口域由宿主显式补充；内嵌数据生成物（data/frontend 资源 TU）编入 `besq-domain-business`（与加载器同归档，无跨归档回引）。
+- `besq-core` 是 STATIC 聚合（algorithm + business + orchestration + 锚点 TU），接口域由宿主显式补充；内嵌数据生成物（data 资源 TU）编入 `besq-domain-business`（与加载器同归档，无跨归档回引）。
 - 插件构建：宿主 configure 时渲染 `build/besq-coreConfig.cmake`，导出唯一 IMPORTED 目标 `besq-algo-core::besq-algo-core` 与诊断宏定义（保证与宿主 ODR 一致）。插件强制与宿主**同编译器、同构建类型**。
 
 ---
@@ -91,10 +90,10 @@ cmake --build build --target forge_benchmark
 
 ```
 src/
-├── main.cpp                  # CLI 入口（apply_lang → CLIApp::run）
-├── AppConfig.h               # 运行时配置（env 读取：BESQ_LANG/SANDBOX/GUI_*…）
+├── main.cpp                  # 入口（apply_lang → 目标分发：CLIApp::run / --api serve HTTP 服务）
+├── AppConfig.h               # 运行时配置（env 读取：BESQ_LANG/SANDBOX/HTTP_*…）
 ├── BuildConfig.h.in          # 生成头（BESQ_VERSION 等）
-├── builtin/                  # 嵌入资源收集层（EmbeddedData/FrontendAssets 壳头 + 生成物锚点；枚举/接口/实现由 CMake besq_embed_resources 全自动生成，零项目内依赖）
+├── builtin/                  # 嵌入资源收集层（EmbeddedData 壳头 + 生成物锚点；枚举/接口/实现由 CMake besq_embed_resources 全自动生成，零项目内依赖）
 ├── common/                   # 共享工具（6 个独立库）
 │   ├── ds/  i18n/  io/  log/  serialization/  utils/（含 cli/CLIParser v2、queue/、thread/）
 ├── domain/
@@ -128,10 +127,8 @@ src/
 │       ├── components/http/  #   可复用 HTTP 框架（besq-http）：Server/Reactor/Connection/Router/SSE
 │       └── web/              #   WebModule（8 控制器）+ WebSolveService + SseHub
 ├── worker/                   # besq-worker 沙箱子进程（dlopen → seccomp → serve IPC）
-└── gui/                      # besq-gui 主程序（HttpServer + WebModule 装配）
 
 include/besq/besq.h           # 公开 C ABI 头
-gui/frontend/                 # SPA（vanilla JS + mdui，hash 路由，编译期嵌入）
 plugins/                      # 外部策略（astar/dfs/idastar/diff_first/penalty_balance/malicious）
 data/                         # builtin/vanilla.json、i18n/、tests/（profiles、testcases、datapack）
 tests/                        # 按域分目录，~90 个测试二进制（共享 test_framework.h）
@@ -218,8 +215,8 @@ class IForgeEngine {
 |---|---|---|
 | CLI | `besq` | 28 选项（v2 模板解析器 `CLIParser`，编译期 OptionTable 校验、`duplicate_option` 诊断、help 分组、i18n 错误） |
 | C ABI | `include/besq/besq.h` | 29 个 `besq_*` 函数；错误 = last_error + -1/nullptr；JSON 交换 |
-| HTTP | `besq-gui` | 8 控制器 27+ 路由（见下表）；错误信封 `{ok, error}` |
-| SSE | `besq-gui` | `event: progress/diag/completed/failed + data: JSON`；15s 心跳；logs 流为纯 data 帧 |
+| HTTP | `besq --api serve` | 8 控制器 27+ 路由（见下表）；错误信封 `{ok, error}` |
+| SSE | `besq --api serve` | `event: progress/diag/completed/failed + data: JSON`；15s 心跳；logs 流为纯 data 帧 |
 | 插件 | `plugins/` | 单 C 符号 `besq_create_algorithm`；共享 vtable/heap 故无需 destroy；加载前静态审计（W^X/危险导入） |
 
 **Web 端点速查**：
@@ -252,7 +249,7 @@ main.cpp → apply_lang(在 parse 之前，保证错误消息语言正确) → C
   → OutputFormatter: verbose / compact / json(schema v1.1)
 ```
 
-### 6.2 GUI 求解路径（HTTP + SSE）
+### 6.2 HTTP 求解路径（REST + SSE）
 
 ```
 POST /api/tasks → Connection（增量解析、请求走私防护）→ Router
@@ -285,7 +282,7 @@ AlgorithmLoader::create_executor → SandboxedExecutor（父进程绝不 dlopen�
 vanilla.json / CSV / datapack(pack.mcmeta) → FormatDetector → 三解析器 → DTO
   → RegistryLoader::resolve_own_content（两阶段）→ LimitedLevelCalculator
   → Profile → ProfileManager（事务 + 快照）→ resolve_effective（依赖拓扑合并）
-  → CompactAdapter::apply → EnchReg → 算法求解 → recall → Solution → 格式化/前端
+  → CompactAdapter::apply → EnchReg → 算法求解 → recall → Solution → 格式化/HTTP 输出
 ```
 
 ---

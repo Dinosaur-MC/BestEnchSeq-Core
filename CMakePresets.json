@@ -13,7 +13,6 @@
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "ON",
                 "BESQ_BUILD_SANDBOX": "ON",
-                "BESQ_BUILD_GUI": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "32"
@@ -31,7 +30,6 @@
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "ON",
                 "BESQ_BUILD_SANDBOX": "ON",
-                "BESQ_BUILD_GUI": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "128"
@@ -89,18 +87,17 @@
             }
         },
         {
-            "name": "gui",
-            "displayName": "GUI (Web + frontend, debug)",
-            "description": "Build the besq-gui Web GUI executable with tests (Debug). Independent build dir so it never clashes with the CLI/tests preset.",
-            "binaryDir": "${sourceDir}/build-gui",
+            "name": "server",
+            "displayName": "HTTP server (debug)",
+            "description": "Build the besq HTTP API service executable (--api serve) with tests (Debug). Independent build dir so it never clashes with the CLI/tests preset.",
+            "binaryDir": "${sourceDir}/build-server",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_C_COMPILER": "clang",
-                "BESQ_BUILD_CLI": "OFF",
+                "BESQ_BUILD_CLI": "ON",
                 "BESQ_BUILD_SANDBOX": "OFF",
-                "BESQ_BUILD_GUI": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "OFF",
                 "BESQ_MAX_SOLUTIONS": "128"
@@ -142,11 +139,11 @@
             "targets": ["besq-worker"]
         },
         {
-            "name": "gui",
-            "configurePreset": "gui",
-            "displayName": "GUI executable",
-            "description": "Build the besq-gui Web GUI executable only",
-            "targets": ["besq-gui"]
+            "name": "server",
+            "configurePreset": "server",
+            "displayName": "HTTP API service executable",
+            "description": "Build the besq executable (includes the --api serve HTTP service)",
+            "targets": ["besq"]
         }
     ],
     "testPresets": [
@@ -163,10 +160,10 @@
             "description": "Run the complete test suite (debug build)"
         },
         {
-            "name": "gui",
-            "configurePreset": "gui",
-            "displayName": "Run tests (gui build)",
-            "description": "Run the complete test suite (gui debug build)"
+            "name": "server",
+            "configurePreset": "server",
+            "displayName": "Run tests (server build)",
+            "description": "Run the complete test suite (server debug build)"
         }
     ]
 }

@@ -24,8 +24,8 @@
 /// profiles) all resolve against the executable's own directory (exe_dir()),
 /// so behavior is independent of the process CWD.  <exe_dir> is assumed
 /// writable (local tooling); env vars still win so a command-line override
-/// always beats the file.  Every consumer of AppConfig::load() (CLI + GUI)
-/// applies the same precedence.
+/// always beats the file.  Every consumer of AppConfig::load() (CLI + HTTP
+/// service) applies the same precedence.
 ///
 /// Environment variable reference:
 ///   BESQ_MEMORY_MB       — Memory budget in MB for A* search          (default: 2048)
@@ -39,15 +39,13 @@
 ///   BESQ_SANDBOX         — Run algorithm plugins in a sandboxed worker (default: 0)
 ///   BESQ_WORKER_PATH     — Path to besq-worker binary (default: auto — <exe_dir>/besq-worker[.exe], then PATH)
 ///   BESQ_STATE_DIR       — Algorithm checkpoint directory               (default: <exe_dir>/states)
-///   BESQ_STATE_AUTOSAVE  — Auto-save a checkpoint when a GUI solve is paused (default: 0)
+///   BESQ_STATE_AUTOSAVE  — Auto-save a checkpoint when a solve is paused (default: 0)
 ///   BESQ_LANG_DIR        — On-disk language files directory             (default: <exe_dir>/langs)
-///   BESQ_GUI_HOST        — GUI HTTP server bind address (default: "127.0.0.1")
-///   BESQ_GUI_PORT        — GUI HTTP server port; 0 = auto-assign a free ephemeral port (default: 0)
-///   BESQ_GUI_OPEN_BROWSER— Open the default browser (v1 host; a WebView2 native window is future work)
-///                          (default: 0)
-///   BESQ_GUI_WORKERS     — GUI HTTP server consumer threads (default: 2)
-///   BESQ_GUI_RES_DIR     — /public disk root; "" → embedded assets only (default: none)
-///   BESQ_LANG            — Language code for the GUI (default: config.json lang, else en_US)
+///   BESQ_HTTP_HOST       — HTTP service bind address (default: "127.0.0.1")
+///   BESQ_HTTP_PORT       — HTTP service port; 0 = auto-assign a free ephemeral port (default: 0)
+///   BESQ_HTTP_WORKERS    — HTTP service consumer threads (default: 2)
+///   BESQ_HTTP_RES_DIR    — /public disk root; "" → not mounted (default: none)
+///   BESQ_LANG            — Language code for the service (default: config.json lang, else en_US)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
@@ -60,14 +58,13 @@ struct AppConfig {
     bool     sandbox_enabled   = false; // run plugins in a sandboxed worker
     std::string sandbox_worker_path;    // besq-worker binary ("" → <exe_dir>/besq-worker[.exe], then PATH)
     std::string state_dir     = (exe_dir() / "states").string();    // <exe_dir>/states
-    bool     state_autosave   = false;  // save a checkpoint automatically on GUI pause
+    bool     state_autosave   = false;  // save a checkpoint automatically on solve pause
     std::string langs_dir     = (exe_dir() / "langs").string();    // <exe_dir>/langs
-    std::string gui_host = "127.0.0.1"; // GUI HTTP server bind address
-    uint16_t    gui_port = 0;           // GUI HTTP server port (0 = auto-assign free port)
-    bool        gui_open_browser = false; // v1 host: open the default browser (a WebView2 native window is future work)
-    size_t      gui_workers = 2;        // GUI HTTP server consumer threads
-    std::string gui_res_dir;            // /public disk root ("" → embedded assets only)
-    std::string runtime_lang;           // language from config.json / BESQ_LANG (the GUI applies it at startup)
+    std::string http_host = "127.0.0.1"; // HTTP service bind address
+    uint16_t    http_port = 0;           // HTTP service port (0 = auto-assign free port)
+    size_t      http_workers = 2;        // HTTP service consumer threads
+    std::string http_res_dir;            // /public disk root ("" → not mounted)
+    std::string runtime_lang;            // language from config.json / BESQ_LANG (the service applies it at startup)
 
     /// Global app configuration singleton — loads BESQ_* env vars on first
     /// use.  Consumers include AppConfig.h and read directly (no param
@@ -126,11 +123,10 @@ struct AppConfig {
         cfg.state_dir         = get_env<std::string>("BESQ_STATE_DIR",  cfg.state_dir);
         cfg.state_autosave    = get_env<bool>   ("BESQ_STATE_AUTOSAVE", cfg.state_autosave);
         cfg.langs_dir         = get_env<std::string>("BESQ_LANG_DIR", cfg.langs_dir);
-        cfg.gui_host         = get_env<std::string>("BESQ_GUI_HOST",           cfg.gui_host);
-        cfg.gui_port         = get_env<uint16_t>   ("BESQ_GUI_PORT",           cfg.gui_port);
-        cfg.gui_open_browser = get_env<bool>       ("BESQ_GUI_OPEN_BROWSER",   cfg.gui_open_browser);
-        cfg.gui_workers      = get_env<size_t>     ("BESQ_GUI_WORKERS",        cfg.gui_workers);
-        cfg.gui_res_dir      = get_env_str         ("BESQ_GUI_RES_DIR");
+        cfg.http_host         = get_env<std::string>("BESQ_HTTP_HOST",    cfg.http_host);
+        cfg.http_port         = get_env<uint16_t>   ("BESQ_HTTP_PORT",    cfg.http_port);
+        cfg.http_workers      = get_env<size_t>     ("BESQ_HTTP_WORKERS", cfg.http_workers);
+        cfg.http_res_dir      = get_env_str         ("BESQ_HTTP_RES_DIR");
         const std::string env_lang = get_env_str("BESQ_LANG");
         if (!env_lang.empty())
             cfg.runtime_lang = env_lang;    // env beats config.json for lang too

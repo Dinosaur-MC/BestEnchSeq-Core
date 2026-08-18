@@ -22,7 +22,7 @@ body:
       description: 你期望的行为 / 界面 / API 形态，可附命令行或 JSON 示例
       placeholder: |
         besq --xxx ...
-        或：GUI 计算器页新增……
+        或：HTTP API 新增 /api/xxx 端点……
     validations:
       required: true
   - type: textarea
@@ -36,7 +36,7 @@ body:
       label: 影响范围
       options:
         - CLI
-        - Web GUI
+        - HTTP API 服务（--api serve）
         - 算法内核 / 插件
         - 数据 / Profile
         - 构建 / 工程化

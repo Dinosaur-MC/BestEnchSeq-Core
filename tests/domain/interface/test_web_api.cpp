@@ -184,19 +184,19 @@ void test_settings(TestApp& app) {
     expect(pj.has("state_dir") && pj["state_dir"].type() == JsonType::String, "GET carries state_dir");
     expect(pj.has("state_autosave") && pj["state_autosave"].type() == JsonType::Bool, "GET carries state_autosave");
 
-    // ── C2: gui_port semantics without server injection ──
+    // ── C2: http_port semantics without server injection ──
     // TestApp drives the Router directly (no WebModule, no real server): the
-    // effective port is never injected, so gui_port must stay the configured
+    // effective port is never injected, so http_port must stay the configured
     // value. The injected-override path is covered in test_web_module (which
     // builds the real WebModule wiring).
-    expect(pj.has("gui_port") && pj["gui_port"].as<int64_t>() == static_cast<int64_t>(AppConfig::get().gui_port),
-           "gui_port stays the configured value without server injection");
+    expect(pj.has("http_port") && pj["http_port"].as<int64_t>() == static_cast<int64_t>(AppConfig::get().http_port),
+           "http_port stays the configured value without server injection");
 
     // ── GET read-only service fields (batch D): startup-only info is exposed
     //    so the settings page can display it ──
     auto sg = app.call(Method::Get, "/api/settings");
     auto sgj = Json::parse(sg.body);
-    expect(sgj.has("gui_workers") && sgj["gui_workers"].as<int64_t>() >= 1, "GET carries gui_workers");
+    expect(sgj.has("http_workers") && sgj["http_workers"].as<int64_t>() >= 1, "GET carries http_workers");
     expect(sgj.has("memory_mb") && sgj["memory_mb"].as<int64_t>() > 0, "GET carries memory_mb");
     expect(sgj.has("sandbox_enabled") && sgj["sandbox_enabled"].type() == JsonType::Bool, "GET carries sandbox_enabled");
 
@@ -1389,17 +1389,11 @@ struct FakeChannel : web::StreamChannel {
     }
 };
 
-/// WebModule 组装测试：/ → 307 + Location、/public/* → 静态、其余 → Router。
+/// WebModule 组装测试：/public/* → 静态、其余 → Router（前端已迁出独立项目，
+/// 不再有 "/" → /public/index.html 的 SPA 入口重定向）。
 void test_web_module(BesqContext& ctx) {
     web::WebModule module(ctx);
     module.set_static_resources({{"/index.html", {"text/html", "<h1>hi</h1>"}}});
-
-    HttpRequest root;
-    root.method = Method::Get;
-    root.path = "/";
-    auto r0 = module.dispatch(root);
-    expect(r0.status == 307, "root 307 redirect");
-    expect(r0.header_value("Location") == "/public/index.html", "root Location header");
 
     HttpRequest idx;
     idx.method = Method::Get;
@@ -1428,7 +1422,7 @@ void test_web_module(BesqContext& ctx) {
     expect(r4.status == 404, "unknown static asset 404");
 
     // ── C2: effective-port injection (real WebModule → SettingsController
-    //    wiring).  Without injection the settings gui_port is the configured
+    //    wiring).  Without injection the settings http_port is the configured
     //    value; after set_effective_port() it reports the injected port —
     //    exactly what main.cpp does with HttpServer::port() post-bind. ──
     HttpRequest st0;
@@ -1436,9 +1430,9 @@ void test_web_module(BesqContext& ctx) {
     st0.path = "/api/settings";
     auto s0 = module.dispatch(st0);
     auto sj0 = Json::parse(s0.body);
-    expect(s0.status == 200 && sj0.has("gui_port") &&
-               sj0["gui_port"].as<int64_t>() == static_cast<int64_t>(AppConfig::get().gui_port),
-           "no injection → gui_port stays the configured value");
+    expect(s0.status == 200 && sj0.has("http_port") &&
+               sj0["http_port"].as<int64_t>() == static_cast<int64_t>(AppConfig::get().http_port),
+           "no injection → http_port stays the configured value");
 
     module.set_effective_port(4321);
     HttpRequest st1;
@@ -1446,7 +1440,7 @@ void test_web_module(BesqContext& ctx) {
     st1.path = "/api/settings";
     auto s1 = module.dispatch(st1);
     auto sj1 = Json::parse(s1.body);
-    expect(s1.status == 200 && sj1["gui_port"].as<int64_t>() == 4321, "injected effective port overrides configured gui_port");
+    expect(s1.status == 200 && sj1["http_port"].as<int64_t>() == 4321, "injected effective port overrides configured http_port");
 }
 
 /// StreamChannel 桥接测试：CalculatorController::events 把 req.stream 上的帧投递通道
