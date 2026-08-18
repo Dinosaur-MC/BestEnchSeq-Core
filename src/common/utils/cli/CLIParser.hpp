@@ -148,13 +148,24 @@ std::vector<std::string_view> parse_tokens_impl(
     const bool auto_help = (cmds || is_sub_level) && !detail::has_help_entry(entries);
     out.command_path = parent_path;
 
+    // 本层收尾：defaults / required / messages 构建。命令匹配分支提前 return 前也必须
+    // 调用，否则父/中间层的 defaults 静默不应用（如 serve.port 默认 8080）、required
+    // 静默不校验（ok() 误报 true）、本层诊断进了 diagnostics 却进不了 messages。
+    // 自动 help 提前返回时不得调用：help_requested 短路必须保持零诊断、不应用默认值。
+    auto finalize = [&]() {
+        detail::apply_defaults(tup, entries);
+        detail::check_required(tup, entries, out.diagnostics);
+        out.messages.reserve(out.diagnostics.size());
+        for (auto& d : out.diagnostics) out.messages.push_back(diag_trans(d));
+    };
+
     bool ended = false;
     for (size_t i = 0; i < tokens.size(); ++i) {
         std::string_view a(tokens[i]);
         if (a == "--") { ended = true; continue; }
 
-        // ── 自动 --help：仅精确 token；表自定义 --help/-h 优先 ──
-        if (auto_help && (a == "--help" || a == "-h")) {
+        // ── 自动 --help：仅精确 token；表自定义 --help/-h 优先；-- 之后不再拦截 ──
+        if (auto_help && !ended && (a == "--help" || a == "-h")) {
             out.help_requested = true;
             return out.command_path;
         }
@@ -181,6 +192,7 @@ std::vector<std::string_view> parse_tokens_impl(
                             return true;
                         }() : false) || ...);
                     }(std::index_sequence_for<Entries...>{});
+                    finalize();
                     return out.command_path;
                 }
             }
@@ -219,6 +231,8 @@ std::vector<std::string_view> parse_tokens_impl(
             int idx = detail::find_by_long_name(entries, key);
             if (idx < 0) { out.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(key)}); continue; }
             if (detail::is_flag_by_index(entries, idx)) {
+                // A flag cannot take a value: `--help=x` is a user error, not a
+                // silent no-op (the value used to be discarded).
                 if (h)
                     out.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(key)});
                 else
@@ -237,12 +251,18 @@ std::vector<std::string_view> parse_tokens_impl(
                 if (already)
                     out.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(key)});
                 if (h) {
+                    // `--opt=` is an empty value, i.e. a missing one.  `--opt=--foo`
+                    // stays legal: the `=` form is unambiguous (the value is
+                    // everything after the equals sign), unlike the space form
+                    // where an option-like token would be misparsed as an option.
                     if (val.empty())
                         out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
                     else
                         detail::set_value_by_index<Entries...>(tup, idx, val, out.diagnostics, key);
                 } else if (i + 1 < tokens.size()) {
                     std::string_view n(tokens[i + 1]);
+                    // 单个 `-` 是合法值（Unix stdout/stdin 惯例，如 `--export -`）；
+                    // 仅拒绝多字符 `-` 前缀 token（`--foo`/`-f` 是选项，不吞为值）。
                     if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, out.diagnostics, key); }
                     else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
                 } else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
@@ -268,6 +288,9 @@ std::vector<std::string_view> parse_tokens_impl(
         int idx = detail::find_by_short_name(entries, f);
         if (idx < 0) { out.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&f, 1)}); continue; }
         if (detail::is_flag_by_index(entries, idx)) {
+            // Reached only when the cluster is NOT all flags (that path returned
+            // above).  A flag cannot take the remaining chars as a value — `-hs`
+            // used to silently drop the 's'.  Report it instead of guessing.
             if (sc.size() > 1)
                 out.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(&f, 1)});
             else
@@ -288,16 +311,14 @@ std::vector<std::string_view> parse_tokens_impl(
             if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), out.diagnostics, {&f, 1});
             else if (i + 1 < tokens.size()) {
                 std::string_view n(tokens[i + 1]);
+                // 单个 `-` 是合法值（Unix 惯例）；仅拒绝多字符 `-` 前缀 token。
                 if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, out.diagnostics, std::string_view(&f, 1)); }
                 else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
             } else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
         }
     }
 
-    detail::apply_defaults(tup, entries);
-    detail::check_required(tup, entries, out.diagnostics);
-    out.messages.reserve(out.diagnostics.size());
-    for (auto& d : out.diagnostics) out.messages.push_back(diag_trans(d));
+    finalize();
     return out.command_path;
 }
 

@@ -328,7 +328,7 @@ TEST_CASE("test_subcmd_help_commands_section") {
     expect(help.find("--host") == std::string::npos, "nested options NOT in top help");
     // 回归：Commands 段只渲染一次 —— §2 选项分组渲染器不得再渲染 Command 条目
     size_t count = 0, pos = 0;
-    while ((pos = help.find("--- Commands ---", pos)) != std::string::npos) { ++count; pos += 17; }
+    while ((pos = help.find("--- Commands ---", pos)) != std::string::npos) { ++count; pos += std::string_view("--- Commands ---").size(); }
     expect(count == 1, "Commands section appears exactly once");
     TEST_PASS("commands section in top help");
 }
@@ -353,6 +353,12 @@ TEST_CASE("test_subcmd_help_path") {
         std::string top = CLIParser(SUB_OPTS).format_help("prog");
         std::string h = CLIParser(SUB_OPTS).format_help("prog", path({"nope"}));
         expect(h == top, "unknown path falls back to top help");
+    }
+    {
+        // 深路径中途未知命令 → 直接回退根表帮助（不是 serve 层帮助）
+        std::string top = CLIParser(SUB_OPTS).format_help("prog");
+        std::string h = CLIParser(SUB_OPTS).format_help("prog", path({"serve", "nope"}));
+        expect(h == top, "deep unknown path falls back to root top help");
     }
     TEST_PASS("command path help");
 }
@@ -414,11 +420,25 @@ TEST_CASE("test_subcmd_select_nested") {
     expect(result.ok(), "nested parse ok");
     expect(result.command_path.size() == 2 && result.command_path[1] == "run", "top command_path full path");
     auto& sub = std::get<1>(result.value);
+    expect(std::get<1>(sub->value).has_value() && *std::get<1>(sub->value) == 8080,
+           "mid-level default applied with deeper command selected");
     auto& run = std::get<2>(sub->value);
     expect(run.has_value(), "run selected");
     expect(std::get<0>(run->value) == true, "daemon flag set");
     expect(run->command_path.size() == 2 && run->command_path[1] == "run", "nested result holds full path");
     TEST_PASS("subcmd select nested");
+}
+
+TEST_CASE("test_subcmd_parent_diag_in_messages") {
+    // F1 回归：命令匹配提前 return 前必须执行本层收尾——父层诊断要进 messages（此前
+    // 只进 diagnostics，all_messages() 丢失该条）。
+    const char* argv[] = {"prog", "--bad", "serve"};
+    auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+    expect(has_diag(result.diagnostics, ParseErrorCode::unknown_option), "pre-command --bad -> top unknown_option");
+    auto msgs = result.all_messages();
+    expect(msgs.size() == 1 && msgs[0].find("unknown option") != std::string::npos,
+           "pre-command diagnostic reaches all_messages");
+    TEST_PASS("parent diag in messages");
 }
 
 TEST_CASE("test_subcmd_select_leaf") {
@@ -460,6 +480,7 @@ TEST_CASE("test_subcmd_scope_split") {
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
         expect(result.diagnostics.empty(), "top-level clean");
         expect(!result.ok(), "nested error makes ok() false");
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         auto& sub = std::get<1>(result.value);
         expect(has_diag(sub->diagnostics, ParseErrorCode::unknown_option), "global option after command -> nested unknown_option");
     }
@@ -470,33 +491,39 @@ TEST_CASE("test_subcmd_nested_errors") {
     {
         const char* argv[] = {"prog", "serve", "--port"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::missing_value), "nested missing_value");
     }
     {
         const char* argv[] = {"prog", "serve", "--port", "1", "--port", "2"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 6));
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::duplicate_option), "nested duplicate_option");
     }
     {
         const char* argv[] = {"prog", "serve", "--port", "abc"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::invalid_value), "nested invalid_value");
     }
     {
         // serve 表含 run/stop 命令，frob 未匹配 → 子层 unknown_command
         const char* argv[] = {"prog", "serve", "frob"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::unknown_command), "nested unknown_command");
     }
     {
         const char* argv[] = {"prog", "solve"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(std::get<2>(result.value).has_value(), "solve selected before deref");
         expect(has_diag(std::get<2>(result.value)->diagnostics, ParseErrorCode::required_missing), "nested required_missing");
     }
     {
         // §4.6：子层再遇命令名 token，子表无同名命令 → 子层 unknown_command
         const char* argv[] = {"prog", "serve", "serve"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::unknown_command),
                "second command token at sub level -> nested unknown_command");
     }
@@ -537,6 +564,7 @@ TEST_CASE("test_subcmd_double_dash_no_command") {
     {
         const char* argv[] = {"prog", "serve", "--", "stop"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::unexpected_positional),
                "子层 -- 后同样不匹配命令");
     }
@@ -554,6 +582,7 @@ TEST_CASE("test_subcmd_path_and_messages") {
         const char* argv[] = {"prog", "serve", "--port", "abc"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
         expect(!result.ok(), "nested error -> ok() false");
+        expect(std::get<1>(result.value).has_value(), "serve selected before deref");
         auto msgs = result.all_messages();
         expect(msgs.size() == 1 && msgs[0].find("invalid value") != std::string::npos,
                "all_messages flattens nested formatted message");
@@ -578,6 +607,20 @@ TEST_CASE("test_subcmd_auto_help_top") {
         const char* argv[] = {"prog", "-h"};
         auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
         expect(result.help_requested, "-h exact token also auto help");
+    }
+    {
+        // 自动 help 只认精确 token：--help=x 不是 help，走普通选项解析 → unknown_option
+        const char* argv[] = {"prog", "--help=x"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(!result.help_requested, "--help=x is NOT auto help");
+        expect(has_diag(result.diagnostics, ParseErrorCode::unknown_option), "--help=x -> unknown_option");
+    }
+    {
+        // 簇 -hv 不是精确 token：h 不在顶层表 → unknown_option，绝不置 help_requested
+        const char* argv[] = {"prog", "-hv"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(!result.help_requested, "-hv cluster is NOT auto help");
+        expect(has_diag(result.diagnostics, ParseErrorCode::unknown_option), "-hv -> unknown_option");
     }
     TEST_PASS("top-level auto help");
 }
