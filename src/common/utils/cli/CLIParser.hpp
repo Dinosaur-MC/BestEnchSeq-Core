@@ -56,6 +56,32 @@ int find_by_short_name(const std::tuple<Entries...>& tup, char name) noexcept {
 }
 
 template<typename... Entries>
+int find_command_by_name(const std::tuple<Entries...>& tup, std::string_view name) noexcept {
+    int r = -1;
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]() -> bool {
+            const auto& e = std::get<Is>(tup);
+            if constexpr (is_command<std::decay_t<decltype(e)>>::value)
+                if (e.name == name) { r = static_cast<int>(Is); return false; }
+            return true;
+        }()) && ...);
+    }(std::index_sequence_for<Entries...>{});
+    return r;
+}
+
+template<typename... Entries>
+bool has_commands(const std::tuple<Entries...>& tup) noexcept {
+    bool r = false;
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]{
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (is_command<ET>::value) r = true;
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
+    return r;
+}
+
+template<typename... Entries>
 void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup, size_t index,
                         std::string_view val, std::vector<Diagnostic>& diags,
                         std::string_view opt) {
@@ -66,7 +92,7 @@ void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup, size_t index,
         ((index == Is ? [&]() -> bool {
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
             if constexpr (std::is_same_v<ET, Flag>) { std::get<Is>(tup) = true; }
-            else {
+            else if constexpr (!is_command<ET>::value) {
                 using VT = typename OptionValueType<ET>::type::value_type;
                 VT p{};
                 if (from_string(val, p)) std::get<Is>(tup) = std::move(p);
@@ -97,6 +123,170 @@ void check_required(const std::tuple<OptionValue<Entries>...>& tup, const std::t
             if constexpr (requires { v.has_value(); }) { if (!v.has_value()) d.push_back(Diagnostic{ParseErrorCode::required_missing, {}, std::string(std::get<Is>(e).long_name)}); }
         }}}()), ...);
     }(std::index_sequence_for<Entries...>{});
+}
+
+/// 共享 token 循环：顶层与嵌套命令层复用。
+/// tokens: 本层待解析 token（顶层不含 argv[0]）；is_sub_level: 是否位于某命令之下；
+/// parent_path: 父层完整命令路径（顶层为空）；diag_trans: 本层诊断格式化器。
+/// 返回最终完整命令路径；out.command_path 始终置为该路径；层内完成 defaults/required/messages。
+template<typename... Entries>
+std::vector<std::string_view> parse_tokens_impl(
+    std::span<const char*> tokens,
+    const OptionTable<Entries...>& table,
+    ParseResult<Entries...>& out,
+    bool is_sub_level,
+    const std::vector<std::string_view>& parent_path,
+    const std::function<std::string(const Diagnostic&)>& diag_trans) {
+    auto& tup = out.value;
+    const auto& entries = table.entries;
+    const bool cmds = detail::has_commands(entries);
+    out.command_path = parent_path;
+
+    bool ended = false;
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        std::string_view a(tokens[i]);
+        if (a == "--") { ended = true; continue; }
+
+        // ── 非选项 token ──
+        if (ended || !(a.size() >= 2 && a[0] == '-')) {
+            // ① 命令匹配（首匹配优先，大小写敏感；-- 之后永不匹配命令）
+            if (!ended && cmds) {
+                const int cidx = detail::find_command_by_name(entries, a);
+                if (cidx >= 0) {
+                    std::vector<std::string_view> path = parent_path;
+                    path.push_back(a);
+                    out.command_path = path;
+                    [&]<size_t... Is>(std::index_sequence<Is...>) {
+                        ((cidx == static_cast<int>(Is) ? [&]() -> bool {
+                            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                            if constexpr (is_command<ET>::value) {
+                                using R = typename command_entries<ET>::result_type;
+                                R sub;
+                                out.command_path = detail::parse_tokens_impl(
+                                    tokens.subspan(i + 1), std::get<Is>(entries).table, sub, true, path, diag_trans);
+                                std::get<Is>(tup) = std::move(sub);
+                            }
+                            return true;
+                        }() : false) || ...);
+                    }(std::index_sequence_for<Entries...>{});
+                    return out.command_path;
+                }
+            }
+            // ② 位置参数
+            bool ok = false;
+            [&]<size_t... Is>(std::index_sequence<Is...>) {
+                ((!ok && [&]() -> bool {
+                    using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                    if constexpr (requires { typename ET::value_type; }) {
+                        if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
+                            if (!std::get<Is>(tup).has_value()) {
+                                typename ET::value_type p{};
+                                if (from_string(a, p)) { std::get<Is>(tup) = std::move(p); ok = true; }
+                            }
+                        }
+                    }
+                    return false;
+                }()) || ...);
+            }(std::index_sequence_for<Entries...>{});
+            // ③ 无处可去：有命令的表报 unknown_command（-- 之后永不匹配命令，保持 unexpected_positional）
+            if (!ok) {
+                if (cmds && !ended)
+                    out.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_command, a, {}});
+                else
+                    out.diagnostics.push_back(Diagnostic{ParseErrorCode::unexpected_positional, a, {}});
+            }
+            continue;
+        }
+
+        // ── 长选项（原 parse() 第 178–226 行搬移；args → tokens，r.diagnostics → out.diagnostics）──
+        if (a[1] == '-') {
+            auto eq = a.find('=', 2);
+            std::string_view key, val;
+            bool h = eq != std::string_view::npos;
+            if (h) { key = a.substr(2, eq - 2); val = a.substr(eq + 1); } else key = a.substr(2);
+            int idx = detail::find_by_long_name(entries, key);
+            if (idx < 0) { out.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(key)}); continue; }
+            if (detail::is_flag_by_index(entries, idx)) {
+                if (h)
+                    out.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(key)});
+                else
+                    detail::set_value_by_index<Entries...>(tup, idx, {}, out.diagnostics, key);
+            } else {
+                bool already = false;
+                [&]<size_t... Is>(std::index_sequence<Is...>) {
+                    ([&]{
+                        using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                        if constexpr (!std::is_same_v<ET, Flag>) {
+                            if (idx == static_cast<int>(Is) && std::get<Is>(tup).has_value())
+                                already = true;
+                        }
+                    }(), ...);
+                }(std::index_sequence_for<Entries...>{});
+                if (already)
+                    out.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(key)});
+                if (h) {
+                    if (val.empty())
+                        out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
+                    else
+                        detail::set_value_by_index<Entries...>(tup, idx, val, out.diagnostics, key);
+                } else if (i + 1 < tokens.size()) {
+                    std::string_view n(tokens[i + 1]);
+                    if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, out.diagnostics, key); }
+                    else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
+                } else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
+            }
+            continue;
+        }
+
+        // ── 短选项（原 parse() 第 228–276 行搬移；args → tokens，r.diagnostics → out.diagnostics）──
+        std::string_view sc = a.substr(1);
+        if (sc.size() > 1) {
+            bool all = true;
+            for (char c : sc) { int ix = detail::find_by_short_name(entries, c); if (ix < 0 || !detail::is_flag_by_index(entries, ix)) { all = false; break; } }
+            if (all) {
+                for (char c : sc) {
+                    int ix = detail::find_by_short_name(entries, c);
+                    if (ix >= 0) detail::set_value_by_index<Entries...>(tup, ix, {}, out.diagnostics, {&c, 1});
+                    else out.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&c, 1)});
+                }
+                continue;
+            }
+        }
+        char f = sc[0];
+        int idx = detail::find_by_short_name(entries, f);
+        if (idx < 0) { out.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&f, 1)}); continue; }
+        if (detail::is_flag_by_index(entries, idx)) {
+            if (sc.size() > 1)
+                out.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(&f, 1)});
+            else
+                detail::set_value_by_index<Entries...>(tup, idx, {}, out.diagnostics, {&f, 1});
+        } else {
+            bool already = false;
+            [&]<size_t... Is>(std::index_sequence<Is...>) {
+                ([&]{
+                    using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                    if constexpr (!std::is_same_v<ET, Flag>) {
+                        if (idx == static_cast<int>(Is) && std::get<Is>(tup).has_value())
+                            already = true;
+                    }
+                }(), ...);
+            }(std::index_sequence_for<Entries...>{});
+            if (already)
+                out.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(&f, 1)});
+            if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), out.diagnostics, {&f, 1});
+            else if (i + 1 < tokens.size()) {
+                std::string_view n(tokens[i + 1]);
+                if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, out.diagnostics, std::string_view(&f, 1)); }
+                else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
+            } else out.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
+        }
+    }
+
+    detail::apply_defaults(tup, entries);
+    detail::check_required(tup, entries, out.diagnostics);
+    out.messages.reserve(out.diagnostics.size());
+    for (auto& d : out.diagnostics) out.messages.push_back(diag_trans(d));
+    return out.command_path;
 }
 
 inline auto make_diag_trans(auto& t) -> std::function<std::string(const Diagnostic&)> {
@@ -146,139 +336,8 @@ template<typename... Entries, typename T> CLIParser(OptionTable<Entries...>, T) 
 template<typename... Entries>
 ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args) const {
     ParseResult<Entries...> r;
-    auto& tup = r.value;
-    const auto& entries = _table.entries;
-
-    size_t start = (args.size() > 0) ? 1 : 0;
-    bool ended = false;
-
-    for (size_t i = start; i < args.size(); ++i) {
-        std::string_view a(args[i]);
-        if (a == "--") { ended = true; continue; }
-
-        // Positional
-        if (ended || !(a.size() >= 2 && a[0] == '-')) {
-            bool ok = false;
-            [&]<size_t... Is>(std::index_sequence<Is...>) {
-                ((!ok && [&]() -> bool {
-                    using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-                    if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
-                        if (!std::get<Is>(tup).has_value()) {
-                            typename ET::value_type p{};
-                            if (from_string(a, p)) { std::get<Is>(tup) = std::move(p); ok = true; }
-                        }
-                    }
-                    return false;
-                }()) || ...);
-            }(std::index_sequence_for<Entries...>{});
-            if (!ok) r.diagnostics.push_back(Diagnostic{ParseErrorCode::unexpected_positional, a, {}});
-            continue;
-        }
-
-        // Long option
-        if (a[1] == '-') {
-            auto eq = a.find('=', 2);
-            std::string_view key, val;
-            bool h = eq != std::string_view::npos;
-            if (h) { key = a.substr(2, eq - 2); val = a.substr(eq + 1); } else key = a.substr(2);
-            int idx = detail::find_by_long_name(entries, key);
-            if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(key)}); continue; }
-            if (detail::is_flag_by_index(entries, idx)) {
-                // A flag cannot take a value: `--help=x` is a user error, not a
-                // silent no-op (the value used to be discarded).
-                if (h)
-                    r.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(key)});
-                else
-                    detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, key);
-            } else {
-                // ── Duplicate check ──
-                bool already = false;
-                [&]<size_t... Is>(std::index_sequence<Is...>) {
-                    ([&]{
-                        using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-                        if constexpr (!std::is_same_v<ET, Flag>) {
-                            if (idx == static_cast<int>(Is) && std::get<Is>(tup).has_value())
-                                already = true;
-                        }
-                    }(), ...);
-                }(std::index_sequence_for<Entries...>{});
-                if (already)
-                    r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(key)});
-                // ── End duplicate check ──
-                if (h) {
-                    // `--opt=` is an empty value, i.e. a missing one.  `--opt=--foo`
-                    // stays legal: the `=` form is unambiguous (the value is
-                    // everything after the equals sign), unlike the space form
-                    // where an option-like token would be misparsed as an option.
-                    if (val.empty())
-                        r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
-                    else
-                        detail::set_value_by_index<Entries...>(tup, idx, val, r.diagnostics, key);
-                } else if (i + 1 < args.size()) {
-                    std::string_view n(args[i + 1]);
-                    // 单个 `-` 是合法值（Unix stdout/stdin 惯例，如 `--export -`）；
-                    // 仅拒绝多字符 `-` 前缀 token（`--foo`/`-f` 是选项，不吞为值）。
-                    if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, key); }
-                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
-                } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
-            }
-            continue;
-        }
-
-        // Short option
-        std::string_view sc = a.substr(1);
-        if (sc.size() > 1) {
-            bool all = true;
-            for (char c : sc) { int ix = detail::find_by_short_name(entries, c); if (ix < 0 || !detail::is_flag_by_index(entries, ix)) { all = false; break; } }
-            if (all) {
-                for (char c : sc) {
-                    int ix = detail::find_by_short_name(entries, c);
-                    if (ix >= 0) detail::set_value_by_index<Entries...>(tup, ix, {}, r.diagnostics, {&c, 1});
-                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&c, 1)});
-                }
-                continue;
-            }
-        }
-        char f = sc[0];
-        int idx = detail::find_by_short_name(entries, f);
-        if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&f, 1)}); continue; }
-        if (detail::is_flag_by_index(entries, idx)) {
-            // Reached only when the cluster is NOT all flags (that path returned
-            // above).  A flag cannot take the remaining chars as a value — `-hs`
-            // used to silently drop the 's'.  Report it instead of guessing.
-            if (sc.size() > 1)
-                r.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(&f, 1)});
-            else
-                detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, {&f, 1});
-        } else {
-            // ── Duplicate check ──
-            bool already = false;
-            [&]<size_t... Is>(std::index_sequence<Is...>) {
-                ([&]{
-                    using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-                    if constexpr (!std::is_same_v<ET, Flag>) {
-                        if (idx == static_cast<int>(Is) && std::get<Is>(tup).has_value())
-                            already = true;
-                    }
-                }(), ...);
-            }(std::index_sequence_for<Entries...>{});
-            if (already)
-                r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(&f, 1)});
-            // ── End duplicate check ──
-            if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), r.diagnostics, {&f, 1});
-            else if (i + 1 < args.size()) {
-                std::string_view n(args[i + 1]);
-                // 单个 `-` 是合法值（Unix 惯例）；仅拒绝多字符 `-` 前缀 token。
-                if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, std::string_view(&f, 1)); }
-                else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
-            } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
-        }
-    }
-
-    detail::apply_defaults(tup, entries);
-    detail::check_required(tup, entries, r.diagnostics);
-    r.messages.reserve(r.diagnostics.size());
-    for (auto& d : r.diagnostics) r.messages.push_back(_diag_trans(d));
+    const std::span<const char*> tokens = args.size() > 0 ? args.subspan(1) : args;
+    detail::parse_tokens_impl(tokens, _table, r, false, {}, _diag_trans);
     return r;
 }
 

@@ -33,6 +33,38 @@ static const auto TEST_OPTS = OptionTable{
     Positional<std::string>{.name = "input", .help_key = "Input file"},
 };
 
+// ============================================================================
+// Subcommand test table — covers Command nesting (serve → run/stop), leaf Command<>
+// ============================================================================
+
+static const auto SUB_OPTS = OptionTable{
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "Verbose output", .help_group = "Info"},
+    Command<Option<std::string>, Option<int>, Command<Flag>, Command<>>{
+        .name = "serve",
+        .help_key = "Run the HTTP server",
+        .table = OptionTable{
+            Option<std::string>{.long_name = "host", .short_name = 'H', .help_key = "Bind address"},
+            Option<int>{.long_name = "port", .short_name = 'p', .help_key = "Listen port", .default_v = 8080},
+            Command<Flag>{.name = "run", .help_key = "Run in foreground",
+                          .table = OptionTable{Flag{.long_name = "daemon", .short_name = 'd', .help_key = "Daemonize"}}},
+            Command<>{.name = "stop", .help_key = "Stop the server"},
+        },
+    },
+    Command<Option<std::string>, Flag>{
+        .name = "solve",
+        .help_key = "Solve a forging plan",
+        .table = OptionTable{
+            Option<std::string>{.long_name = "target", .help_key = "Target item", .required = true},
+            Flag{.long_name = "help", .short_name = 'h', .help_key = "Show solve help"},
+        },
+    },
+};
+
+/// 无命令且无 help 的旧式表（自动 help 兼容门控测试用）
+static const auto NOHELP_OPTS = OptionTable{
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "Verbose output", .help_group = "Info"},
+};
+
 // Helper: check if a specific diagnostic code exists
 bool has_diag(const std::vector<Diagnostic>& diags, ParseErrorCode code) {
     for (auto& d : diags)
@@ -322,4 +354,170 @@ TEST_CASE("test_subcmd_unknown_command_formatter") {
     expect(msg.find("unknown command") != std::string::npos, "formatter mentions 'unknown command'");
     expect(msg.find("frob") != std::string::npos, "formatter includes the command name");
     TEST_PASS("unknown_command formatter");
+}
+
+TEST_CASE("test_subcmd_select_single") {
+    const char* argv[] = {"prog", "serve", "--host", "127.0.0.1", "--port", "9000"};
+    auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 6));
+    expect(result.diagnostics.empty(), "subcmd parse clean");
+    expect(result.ok(), "recursive ok");
+    expect(result.command_path.size() == 1 && result.command_path[0] == "serve", "top command_path");
+    auto& sub = std::get<1>(result.value);
+    expect(sub.has_value(), "serve selected");
+    expect(*std::get<0>(sub->value) == "127.0.0.1", "nested host bound");
+    expect(*std::get<1>(sub->value) == 9000, "nested port bound");
+    TEST_PASS("subcmd select single");
+}
+
+TEST_CASE("test_subcmd_select_nested") {
+    const char* argv[] = {"prog", "serve", "run", "--daemon"};
+    auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+    expect(result.ok(), "nested parse ok");
+    expect(result.command_path.size() == 2 && result.command_path[1] == "run", "top command_path full path");
+    auto& sub = std::get<1>(result.value);
+    auto& run = std::get<2>(sub->value);
+    expect(run.has_value(), "run selected");
+    expect(std::get<0>(run->value) == true, "daemon flag set");
+    expect(run->command_path.size() == 2 && run->command_path[1] == "run", "nested result holds full path");
+    TEST_PASS("subcmd select nested");
+}
+
+TEST_CASE("test_subcmd_select_leaf") {
+    const char* argv[] = {"prog", "serve", "stop"};
+    auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+    expect(result.ok(), "leaf parse ok");
+    auto& sub = std::get<1>(result.value);
+    expect(std::get<3>(sub->value).has_value(), "empty-table leaf command selected");
+    expect(result.command_path.size() == 2 && result.command_path[1] == "stop", "leaf path");
+    TEST_PASS("subcmd select leaf");
+}
+
+TEST_CASE("test_subcmd_unknown_and_case") {
+    {
+        const char* argv[] = {"prog", "frobnicate"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(has_diag(result.diagnostics, ParseErrorCode::unknown_command), "unknown token -> unknown_command");
+    }
+    {
+        const char* argv[] = {"prog", "Serve"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(has_diag(result.diagnostics, ParseErrorCode::unknown_command), "case-sensitive match");
+    }
+    TEST_PASS("unknown command + case sensitivity");
+}
+
+TEST_CASE("test_subcmd_scope_split") {
+    {
+        const char* argv[] = {"prog", "--verbose", "serve", "--port", "9000"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 5));
+        expect(result.ok(), "pre-command global + post-command sub options parse");
+        expect(std::get<0>(result.value) == true, "global --verbose set");
+        auto& sub = std::get<1>(result.value);
+        expect(*std::get<1>(sub->value) == 9000, "sub --port bound to serve table");
+    }
+    {
+        // 全局专属选项出现在命令后 → 子表 unknown_option（严格分层）
+        const char* argv[] = {"prog", "serve", "--verbose"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(result.diagnostics.empty(), "top-level clean");
+        expect(!result.ok(), "nested error makes ok() false");
+        auto& sub = std::get<1>(result.value);
+        expect(has_diag(sub->diagnostics, ParseErrorCode::unknown_option), "global option after command -> nested unknown_option");
+    }
+    TEST_PASS("strict scope split");
+}
+
+TEST_CASE("test_subcmd_nested_errors") {
+    {
+        const char* argv[] = {"prog", "serve", "--port"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::missing_value), "nested missing_value");
+    }
+    {
+        const char* argv[] = {"prog", "serve", "--port", "1", "--port", "2"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 6));
+        expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::duplicate_option), "nested duplicate_option");
+    }
+    {
+        const char* argv[] = {"prog", "serve", "--port", "abc"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::invalid_value), "nested invalid_value");
+    }
+    {
+        // serve 表含 run/stop 命令，frob 未匹配 → 子层 unknown_command
+        const char* argv[] = {"prog", "serve", "frob"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::unknown_command), "nested unknown_command");
+    }
+    {
+        const char* argv[] = {"prog", "solve"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(has_diag(std::get<2>(result.value)->diagnostics, ParseErrorCode::required_missing), "nested required_missing");
+    }
+    {
+        // §4.6：子层再遇命令名 token，子表无同名命令 → 子层 unknown_command
+        const char* argv[] = {"prog", "serve", "serve"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::unknown_command),
+               "second command token at sub level -> nested unknown_command");
+    }
+    TEST_PASS("nested errors surface at their own level");
+}
+
+TEST_CASE("test_subcmd_command_beats_positional") {
+    // §4.5：表同时含命令与位置参数，token 匹配命令名 → 命令优先
+    const auto MIXED = OptionTable{
+        Command<>{.name = "serve", .help_key = "Serve"},
+        Positional<std::string>{.name = "input", .help_key = "Input"},
+    };
+    {
+        const char* argv[] = {"prog", "serve"};
+        auto r = CLIParser(MIXED).parse(std::span<const char*>(argv, 2));
+        expect(r.ok(), "serve matched as command");
+        expect(std::get<0>(r.value).has_value(), "command slot filled");
+        expect(!std::get<1>(r.value).has_value(), "positional NOT filled");
+    }
+    {
+        const char* argv[] = {"prog", "file.txt"};
+        auto r = CLIParser(MIXED).parse(std::span<const char*>(argv, 2));
+        expect(r.ok(), "non-command token parses");
+        expect(std::get<1>(r.value).has_value() && *std::get<1>(r.value) == "file.txt",
+               "non-command token goes to positional");
+    }
+    TEST_PASS("command beats positional");
+}
+
+TEST_CASE("test_subcmd_double_dash_no_command") {
+    {
+        const char* argv[] = {"prog", "--", "serve"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(has_diag(result.diagnostics, ParseErrorCode::unexpected_positional),
+               "-- 后 token 永不匹配命令 -> unexpected_positional");
+        expect(!has_diag(result.diagnostics, ParseErrorCode::unknown_command), "not unknown_command after --");
+    }
+    {
+        const char* argv[] = {"prog", "serve", "--", "stop"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(has_diag(std::get<1>(result.value)->diagnostics, ParseErrorCode::unexpected_positional),
+               "子层 -- 后同样不匹配命令");
+    }
+    TEST_PASS("-- never matches commands");
+}
+
+TEST_CASE("test_subcmd_path_and_messages") {
+    {
+        const char* argv[] = {"prog", "solve", "--target", "sword"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(result.ok(), "solve parse ok");
+        expect(result.command_path.size() == 1 && result.command_path[0] == "solve", "solve path");
+    }
+    {
+        const char* argv[] = {"prog", "serve", "--port", "abc"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(!result.ok(), "nested error -> ok() false");
+        auto msgs = result.all_messages();
+        expect(msgs.size() == 1 && msgs[0].find("invalid value") != std::string::npos,
+               "all_messages flattens nested formatted message");
+    }
+    TEST_PASS("command_path + all_messages");
 }
