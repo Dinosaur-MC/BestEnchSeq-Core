@@ -285,3 +285,29 @@ TEST_CASE("test_ungrouped_fallback") {
     expect(help.find("--help") != std::string::npos, "ungrouped fallback should show --help");
     TEST_PASS("test_ungrouped_fallback");
 }
+
+TEST_CASE("test_subcmd_type_layer") {
+    // 值类型映射：Command 槽位 = optional<嵌套 ParseResult>
+    static_assert(std::is_same_v<OptionValue<Command<Option<std::string>, Flag>>,
+                                  std::optional<ParseResult<Option<std::string>, Flag>>>);
+    static_assert(std::is_same_v<OptionValue<Command<>>, std::optional<ParseResult<>>>);
+    // is_command trait
+    static_assert(is_command<Command<>>::value);
+    static_assert(!is_command<Flag>::value);
+    // ParseResult 新成员默认值
+    ParseResult<Option<std::string>> r;
+    expect(r.command_path.empty(), "command_path default empty");
+    expect(!r.help_requested, "help_requested default false");
+    expect(r.ok(), "empty result ok");
+    expect(bool(r), "operator bool delegates to ok()");
+    // ok()/all_messages() 递归进命令槽位（手工构造嵌套结果）
+    ParseResult<Flag, Command<Flag>> top;
+    ParseResult<Flag> sub;
+    sub.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_command, "x", {}});
+    sub.messages.push_back("nested err");
+    std::get<1>(top.value) = std::move(sub);
+    expect(!top.ok(), "ok() must recurse into command slots");
+    auto msgs = top.all_messages();
+    expect(msgs.size() == 1 && msgs[0] == "nested err", "all_messages flattens nested messages");
+    TEST_PASS("subcmd type layer");
+}

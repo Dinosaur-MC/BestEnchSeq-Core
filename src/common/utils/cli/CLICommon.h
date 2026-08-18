@@ -46,6 +46,7 @@ enum class ParseErrorCode : uint8_t {
     unexpected_positional,
     duplicate_option,
     flag_takes_no_value,  ///< a value was given to a flag (--flag=x, or a mixed short cluster like -hs)
+    unknown_command,  ///< 表含 Command 且非选项 token 未匹配命令、也无 Positional 可消费
 };
 
 // ============================================================================
@@ -103,6 +104,16 @@ struct Positional {
 };
 
 // ============================================================================
+// Forward declarations + command trait (needed before OptionValueType)
+// ============================================================================
+
+template<typename... Entries> struct ParseResult;
+template<typename... SubEntries> struct Command;
+
+template<typename T> struct is_command : std::false_type {};
+template<typename... SubEntries> struct is_command<Command<SubEntries...>> : std::true_type {};
+
+// ============================================================================
 // OptionValue type mapping
 // ============================================================================
 
@@ -150,6 +161,10 @@ private:
         if constexpr (requires { e.short_name; }) return e.short_name;
         else return '\0';
     }
+    static constexpr std::string_view entry_command_name(const auto& e) noexcept {
+        if constexpr (is_command<std::decay_t<decltype(e)>>::value) return e.name;
+        else return {};
+    }
 
     template<size_t... Is>
     constexpr void check_unique_names(std::index_sequence<Is...>) const noexcept {
@@ -174,11 +189,57 @@ private:
                     std::terminate();
                 }
             }
+
+        // ── command names: non-empty and unique ──
+        const auto cmd_names = std::array{ entry_command_name(std::get<Is>(entries))... };
+        for (size_t i = 0; i < cmd_names.size(); ++i) {
+            if (cmd_names[i].empty()) continue;
+            for (size_t j = i + 1; j < cmd_names.size(); ++j)
+                if (!cmd_names[j].empty() && cmd_names[i] == cmd_names[j]) {
+                    std::fprintf(stderr, "OptionTable: duplicate command name '%.*s'\n",
+                                 static_cast<int>(cmd_names[i].size()), cmd_names[i].data());
+                    std::terminate();
+                }
+        }
+        bool empty_cmd = false;
+        ([&]{
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (is_command<ET>::value)
+                if (std::get<Is>(entries).name.empty()) empty_cmd = true;
+        }(), ...);
+        if (empty_cmd) {
+            std::fprintf(stderr, "OptionTable: command name must not be empty\n");
+            std::terminate();
+        }
     }
 };
 
 template<typename... Entries>
 OptionTable(Entries...) -> OptionTable<Entries...>;
+
+// ============================================================================
+// Command — subcommand entry (each command carries its own independent table)
+// ============================================================================
+
+template<typename... SubEntries>
+struct Command {
+    std::string_view name;                    ///< 子命令名：位置 token 精确匹配（大小写敏感）
+    std::string_view help_key;                ///< 帮助文本（走 help_trans）
+    std::string_view help_group = "Commands"; ///< 帮助分组（默认归入 Commands 段）
+    OptionTable<SubEntries...> table;         ///< 独立选项表（独立 config）；叶子 Command<> 为空表
+};
+
+template<typename Cmd> struct command_entries;
+template<typename... SubEntries>
+struct command_entries<Command<SubEntries...>> {
+    using table_type  = OptionTable<SubEntries...>;
+    using result_type = ParseResult<SubEntries...>;
+};
+
+template<typename... SubEntries>
+struct OptionValueType<Command<SubEntries...>> {
+    using type = std::optional<ParseResult<SubEntries...>>;
+};
 
 // ============================================================================
 // ParseResult
@@ -189,8 +250,46 @@ struct ParseResult {
     std::tuple<OptionValue<Entries>...> value;
     std::vector<Diagnostic> diagnostics;
     std::vector<std::string> messages;
+    /// 命中的命令名全路径（从程序根到本层，如 {"serve","run"}）；无命令时恒空
+    std::vector<std::string_view> command_path;
+    /// 本层收到未定义的 --help/-h（自动 help 门控见 CLIParser.hpp）
+    bool help_requested = false;
 
-    explicit operator bool() const noexcept { return diagnostics.empty(); }
+    /// 递归：本层 + 所有嵌套命令层诊断均为空
+    bool ok() const noexcept {
+        if (!diagnostics.empty()) return false;
+        bool r = true;
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&] {
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) {
+                    const auto& v = std::get<Is>(value);
+                    if (v.has_value() && !v->ok()) r = false;
+                }
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        return r;
+    }
+
+    /// 递归展平本层 + 所有嵌套命令层的格式化消息
+    std::vector<std::string> all_messages() const {
+        std::vector<std::string> out = messages;
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&] {
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) {
+                    const auto& v = std::get<Is>(value);
+                    if (v.has_value()) {
+                        auto sub = v->all_messages();
+                        out.insert(out.end(), sub.begin(), sub.end());
+                    }
+                }
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        return out;
+    }
+
+    explicit operator bool() const noexcept { return ok(); }
 };
 
 } // namespace cli
