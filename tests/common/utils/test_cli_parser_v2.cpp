@@ -318,6 +318,41 @@ TEST_CASE("test_ungrouped_fallback") {
     TEST_PASS("test_ungrouped_fallback");
 }
 
+TEST_CASE("test_subcmd_help_commands_section") {
+    std::string help = CLIParser(SUB_OPTS).format_help("prog");
+    expect(help.find("Commands") != std::string::npos, "commands section header");
+    expect(help.find("serve") != std::string::npos, "lists serve");
+    expect(help.find("solve") != std::string::npos, "lists solve");
+    expect(help.find("Run the HTTP server") != std::string::npos, "command help text rendered");
+    expect(help.find("<command>") != std::string::npos, "usage mentions <command>");
+    expect(help.find("--host") == std::string::npos, "nested options NOT in top help");
+    TEST_PASS("commands section in top help");
+}
+
+TEST_CASE("test_subcmd_help_path") {
+    auto path = [](std::initializer_list<const char*> l) {
+        std::vector<std::string_view> v;
+        for (const char* s : l) v.emplace_back(s);
+        return v;
+    };
+    {
+        std::string h = CLIParser(SUB_OPTS).format_help("prog", path({"serve"}));
+        expect(h.find("prog serve") != std::string::npos, "usage shows command path");
+        expect(h.find("--host") != std::string::npos, "serve options rendered");
+        expect(h.find("run") != std::string::npos && h.find("stop") != std::string::npos, "serve subcommands listed");
+    }
+    {
+        std::string h = CLIParser(SUB_OPTS).format_help("prog", path({"serve", "run"}));
+        expect(h.find("--daemon") != std::string::npos, "run options rendered");
+    }
+    {
+        std::string top = CLIParser(SUB_OPTS).format_help("prog");
+        std::string h = CLIParser(SUB_OPTS).format_help("prog", path({"nope"}));
+        expect(h == top, "unknown path falls back to top help");
+    }
+    TEST_PASS("command path help");
+}
+
 TEST_CASE("test_subcmd_type_layer") {
     // 值类型映射：Command 槽位 = optional<嵌套 ParseResult>
     static_assert(std::is_same_v<OptionValue<Command<Option<std::string>, Flag>>,

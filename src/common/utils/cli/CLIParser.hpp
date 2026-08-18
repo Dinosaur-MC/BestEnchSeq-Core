@@ -301,6 +301,186 @@ std::vector<std::string_view> parse_tokens_impl(
     return out.command_path;
 }
 
+/// 渲染单层帮助（顶层或某个命令层）。用法行、选项分组、无分组选项与旧 format_help
+/// 逐字节一致；表含命令时追加 " <command>"，并新增 Commands 段（按 help_group 分组）。
+template<typename... Entries>
+std::string format_help_level(std::string_view prog, const std::tuple<Entries...>& entries,
+                              const std::function<std::string(std::string_view)>& trans) {
+    std::string r;
+    r += "Usage: "; r += prog; r += " [options]";
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]{ using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (requires { typename ET::value_type; })
+                if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
+                    r += " <"; r += std::get<Is>(entries).name; r += '>';
+                }
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
+    if (has_commands(entries)) r += " <command>";
+    r += "\n\n";
+    // ── 1. 选项分组（原 format_help 第 298–313 行搬移；_table.entries → entries，_help_trans → trans）──
+    struct GroupEntry { std::string_view name; size_t first_idx; };
+    auto groups = [&]() {
+        std::vector<GroupEntry> gs;
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                const auto& e = std::get<Is>(entries);
+                std::string_view g;
+                if constexpr (requires { e.help_group; }) g = e.help_group;
+                if (g.empty()) return;
+                for (auto& grp : gs) { if (grp.name == g) return; }
+                gs.push_back({g, Is});
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        return gs;
+    }();
+    // ── 2. 渲染选项分组（原第 316–351 行搬移；仅替换 _table.entries → entries、_help_trans → trans）──
+    for (const auto& [gname, _] : groups) {
+        r += "  --- "; r += trans(gname); r += " ---\n";
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                const auto& e = std::get<Is>(entries);
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                std::string_view eg;
+                if constexpr (requires { e.help_group; }) eg = e.help_group;
+                if (eg != gname) return;
+                std::string l = "  ";
+                if constexpr (requires { e.short_name; }) {
+                    if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; }
+                    else l += "    ";
+                }
+                if constexpr (requires { e.long_name; })
+                    if (!e.long_name.empty()) { l += "--"; l += e.long_name;
+                        if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; }
+                while (l.size() < 28) l += ' ';
+                l += trans(e.help_key);
+                if constexpr (!std::is_same_v<ET, Flag>)
+                    if constexpr (requires { e.default_v; })
+                        if (e.default_v.has_value()) {
+                            l += " (default: ";
+                            if constexpr (std::is_same_v<typename ET::value_type, std::string>)
+                                l += *e.default_v;
+                            else if constexpr (std::is_same_v<typename ET::value_type, int>)
+                                l += std::to_string(*e.default_v);
+                            else l += "set";
+                            l += ')';
+                        }
+                if constexpr (requires { e.required; }) if (e.required) l += " (required)";
+                l += '\n'; r += l;
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        r += '\n';
+    }
+    // ── 3. 无分组选项（原第 353–399 行搬移；仅替换标识符）──
+    bool has_ungrouped = false;
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]{
+            const auto& e = std::get<Is>(entries);
+            std::string_view eg;
+            if constexpr (requires { e.help_group; }) eg = e.help_group;
+            if (eg.empty()) has_ungrouped = true;
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
+    if (has_ungrouped) {
+        if (!groups.empty()) r += '\n';
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                const auto& e = std::get<Is>(entries);
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                std::string_view eg;
+                if constexpr (requires { e.help_group; }) eg = e.help_group;
+                if (!eg.empty()) return;
+                std::string l = "  ";
+                if constexpr (requires { e.short_name; }) {
+                    if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; }
+                    else l += "    ";
+                }
+                if constexpr (requires { e.long_name; })
+                    if (!e.long_name.empty()) { l += "--"; l += e.long_name;
+                        if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; }
+                while (l.size() < 28) l += ' ';
+                l += trans(e.help_key);
+                if constexpr (!std::is_same_v<ET, Flag>)
+                    if constexpr (requires { e.default_v; })
+                        if (e.default_v.has_value()) {
+                            l += " (default: ";
+                            if constexpr (std::is_same_v<typename ET::value_type, std::string>)
+                                l += *e.default_v;
+                            else if constexpr (std::is_same_v<typename ET::value_type, int>)
+                                l += std::to_string(*e.default_v);
+                            else l += "set";
+                            l += ')';
+                        }
+                if constexpr (requires { e.required; }) if (e.required) l += " (required)";
+                l += '\n'; r += l;
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+    }
+    // ── 4. Commands 段（新增；按 help_group 分组，选项段之后渲染）──
+    struct CmdGroup { std::string_view name; };
+    auto cmd_groups = [&]() {
+        std::vector<CmdGroup> gs;
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) {
+                    const auto& e = std::get<Is>(entries);
+                    const std::string_view g = e.help_group;
+                    for (auto& grp : gs) { if (grp.name == g) return; }
+                    gs.push_back({g});
+                }
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        return gs;
+    }();
+    for (const auto& [gname] : cmd_groups) {
+        r += "\n  --- "; r += trans(gname); r += " ---\n";
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) {
+                    const auto& e = std::get<Is>(entries);
+                    if (e.help_group != gname) return;
+                    std::string l = "  ";
+                    l += e.name;
+                    while (l.size() < 28) l += ' ';
+                    l += trans(e.help_key);
+                    l += '\n'; r += l;
+                }
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+    }
+    return r;
+}
+
+/// 按命令路径下行渲染；任一环未知 → 回退根表帮助。RootEntries = 根表条目包（保持跨层不变）。
+template<typename... RootEntries, typename... Entries>
+std::string format_help_path(std::string_view prog, std::span<const std::string_view> path,
+                             const OptionTable<Entries...>& table,
+                             const std::function<std::string(std::string_view)>& trans,
+                             std::string_view root_prog, const OptionTable<RootEntries...>& root) {
+    if (path.empty()) return format_help_level(prog, table.entries, trans);
+    const int idx = find_command_by_name(table.entries, path.front());
+    if (idx < 0) return format_help_level(root_prog, root.entries, trans);
+    std::string child_prog(prog);
+    child_prog += " ";
+    child_prog += path.front();
+    std::string r;
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        ((idx == static_cast<int>(Is) ? [&]() -> bool {
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (is_command<ET>::value) {
+                using T = typename command_entries<ET>::table_type;
+                r = format_help_path<RootEntries...>(child_prog, path.subspan(1),
+                                                     std::get<Is>(table.entries).table,
+                                                     trans, root_prog, root);
+            }
+            return true;
+        }() : false) || ...);
+    }(std::index_sequence_for<Entries...>{});
+    return r;
+}
+
 inline auto make_diag_trans(auto& t) -> std::function<std::string(const Diagnostic&)> {
     if constexpr (requires { t(std::declval<const Diagnostic&>()); })
         return std::function<std::string(const Diagnostic&)>(t);
@@ -335,6 +515,8 @@ public:
 
     ParseResult<Entries...> parse(std::span<const char*> args) const;
     std::string format_help(std::string_view program_name) const;
+    std::string format_help(std::string_view program_name,
+                            std::span<const std::string_view> command_path) const;
     const OptionTable<Entries...>& table() const noexcept { return _table; }
 };
 
@@ -355,121 +537,13 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
 
 template<typename... Entries>
 std::string CLIParser<Entries...>::format_help(std::string_view prog) const {
-    std::string r;
-    r += "Usage: "; r += prog; r += " [options]";
-    [&]<size_t... Is>(std::index_sequence<Is...>) {
-        (([&]{ using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-            if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
-                r += " <"; r += std::get<Is>(_table.entries).name; r += '>';
-            }
-        }()), ...);
-    }(std::index_sequence_for<Entries...>{});
-    r += "\n\n";
+    return detail::format_help_level(prog, _table.entries, _help_trans);
+}
 
-    // ── 1. Collect unique group names in encounter order ──
-    struct GroupEntry { std::string_view name; size_t first_idx; };
-    auto groups = [&]() {
-        std::vector<GroupEntry> gs;
-        [&]<size_t... Is>(std::index_sequence<Is...>) {
-            (([&]{
-                const auto& e = std::get<Is>(_table.entries);
-                std::string_view g;
-                if constexpr (requires { e.help_group; }) g = e.help_group;
-                if (g.empty()) return;
-                for (auto& grp : gs) { if (grp.name == g) return; }
-                gs.push_back({g, Is});
-            }()), ...);
-        }(std::index_sequence_for<Entries...>{});
-        return gs;
-    }();
-
-    // ── 2. Render groups in order ──
-    for (const auto& [gname, _] : groups) {
-        r += "  --- "; r += _help_trans(gname); r += " ---\n";
-        [&]<size_t... Is>(std::index_sequence<Is...>) {
-            (([&]{
-                const auto& e = std::get<Is>(_table.entries);
-                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-                std::string_view eg;
-                if constexpr (requires { e.help_group; }) eg = e.help_group;
-                if (eg != gname) return;
-                std::string l = "  ";
-                if constexpr (requires { e.short_name; }) {
-                    if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; }
-                    else l += "    ";
-                }
-                if constexpr (requires { e.long_name; })
-                    if (!e.long_name.empty()) { l += "--"; l += e.long_name;
-                        if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; }
-                while (l.size() < 28) l += ' ';
-                l += _help_trans(e.help_key);
-                if constexpr (!std::is_same_v<ET, Flag>)
-                    if constexpr (requires { e.default_v; })
-                        if (e.default_v.has_value()) {
-                            l += " (default: ";
-                            if constexpr (std::is_same_v<typename ET::value_type, std::string>)
-                                l += *e.default_v;
-                            else if constexpr (std::is_same_v<typename ET::value_type, int>)
-                                l += std::to_string(*e.default_v);
-                            else l += "set";
-                            l += ')';
-                        }
-                if constexpr (requires { e.required; }) if (e.required) l += " (required)";
-                l += '\n'; r += l;
-            }()), ...);
-        }(std::index_sequence_for<Entries...>{});
-        r += '\n';
-    }
-
-    // ── 3. Ungrouped options (no help_group set) ──
-    // Render these after all named groups without a header.
-    bool has_ungrouped = false;
-    [&]<size_t... Is>(std::index_sequence<Is...>) {
-        (([&]{
-            const auto& e = std::get<Is>(_table.entries);
-            std::string_view eg;
-            if constexpr (requires { e.help_group; }) eg = e.help_group;
-            if (eg.empty()) has_ungrouped = true;
-        }()), ...);
-    }(std::index_sequence_for<Entries...>{});
-
-    if (has_ungrouped) {
-        if (!groups.empty()) r += '\n';
-        [&]<size_t... Is>(std::index_sequence<Is...>) {
-            (([&]{
-                const auto& e = std::get<Is>(_table.entries);
-                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-                std::string_view eg;
-                if constexpr (requires { e.help_group; }) eg = e.help_group;
-                if (!eg.empty()) return;  // only render ungrouped entries
-                std::string l = "  ";
-                if constexpr (requires { e.short_name; }) {
-                    if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; }
-                    else l += "    ";
-                }
-                if constexpr (requires { e.long_name; })
-                    if (!e.long_name.empty()) { l += "--"; l += e.long_name;
-                        if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; }
-                while (l.size() < 28) l += ' ';
-                l += _help_trans(e.help_key);
-                if constexpr (!std::is_same_v<ET, Flag>)
-                    if constexpr (requires { e.default_v; })
-                        if (e.default_v.has_value()) {
-                            l += " (default: ";
-                            if constexpr (std::is_same_v<typename ET::value_type, std::string>)
-                                l += *e.default_v;
-                            else if constexpr (std::is_same_v<typename ET::value_type, int>)
-                                l += std::to_string(*e.default_v);
-                            else l += "set";
-                            l += ')';
-                        }
-                if constexpr (requires { e.required; }) if (e.required) l += " (required)";
-                l += '\n'; r += l;
-            }()), ...);
-        }(std::index_sequence_for<Entries...>{});
-    }
-
-    return r;
+template<typename... Entries>
+std::string CLIParser<Entries...>::format_help(std::string_view prog,
+                                               std::span<const std::string_view> command_path) const {
+    return detail::format_help_path(prog, command_path, _table, _help_trans, prog, _table);
 }
 
 } // namespace cli
