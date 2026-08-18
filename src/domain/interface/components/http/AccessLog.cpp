@@ -54,7 +54,10 @@ void AccessLogger::log_line(const HttpRequest& req, const HttpResponse& resp) {
     std::string line = (ip.empty() ? "-" : ip) + " - - " + clf_timestamp() + " \"" + sanitize_for_log(request_line(req)) +
                        "\" " + std::to_string(resp.status) + " " + bytes + " " + quote_or_dash(req.header("Referer")) + " " +
                        quote_or_dash(req.header("User-Agent"));
-    Logger::instance().info(std::move(line));
+    if (resp.status < 400)
+        Logger::instance().debug(std::move(line));
+    else
+        Logger::instance().info(std::move(line));
 }
 
 HttpResponse AccessLogger::operator()(const HttpRequest& req, const Next& next) {
@@ -62,11 +65,15 @@ HttpResponse AccessLogger::operator()(const HttpRequest& req, const Next& next) 
         HttpResponse resp = next(req);
         log_line(req, resp);
         return resp;
+    } catch (std::exception& e) {
+        HttpResponse err = HttpResponse::internal_error(e.what());
+        log_line(req, err);
+        throw err;
     } catch (...) {
         // 防御兜底：Router 已把控制器异常映射为响应，正常不会走到；记录 500 后重抛。
-        HttpResponse err = HttpResponse::internal_error("middleware chain threw");
+        HttpResponse err = HttpResponse::internal_error("middleware chain unknown exception threw");
         log_line(req, err);
-        throw;
+        throw err;
     }
 }
 

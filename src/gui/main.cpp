@@ -3,7 +3,6 @@
 #include "builtin/FrontendAssets.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
-#include "common/utils/ExeDir.hpp"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/BuiltinI18n.h"
 #include "domain/interface/components/http/HttpServer.h"
@@ -15,9 +14,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
-#include <memory>
 #include <string>
-#include <string_view>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -180,7 +177,6 @@ int main(int argc, char* argv[]) try {
 
     const auto url = "http://" + cfg.gui_host + ":" + std::to_string(server.port()) + "/";
     LOG_INFO("besq-gui listening at %s", url.c_str());
-    std::cout << "besq-gui serving at " << url << "\n";
 
     // v1 host: the default browser. A native WebView2 window (src/gui/
     // webview_host.*) is future work — it needs the Microsoft WebView2 SDK,
