@@ -521,3 +521,71 @@ TEST_CASE("test_subcmd_path_and_messages") {
     }
     TEST_PASS("command_path + all_messages");
 }
+
+TEST_CASE("test_subcmd_auto_help_top") {
+    {
+        const char* argv[] = {"prog", "--help"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(result.help_requested, "top-level auto help");
+        expect(result.diagnostics.empty(), "no diagnostics for auto help");
+    }
+    {
+        // 停止该层解析：--help 后的坏 token 不再报错
+        const char* argv[] = {"prog", "--help", "--bad"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(result.help_requested && result.diagnostics.empty(), "help stops parsing, zero diagnostics");
+    }
+    {
+        const char* argv[] = {"prog", "-h"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(result.help_requested, "-h exact token also auto help");
+    }
+    TEST_PASS("top-level auto help");
+}
+
+TEST_CASE("test_subcmd_auto_help_nested") {
+    {
+        const char* argv[] = {"prog", "serve", "--help"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(result.diagnostics.empty(), "top clean");
+        expect(!result.help_requested, "top not help_requested");
+        auto& sub = std::get<1>(result.value);
+        expect(sub.has_value() && sub->help_requested, "serve level help_requested");
+    }
+    {
+        const char* argv[] = {"prog", "serve", "run", "--help"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        auto& sub = std::get<1>(result.value);
+        auto& run = std::get<2>(sub->value);
+        expect(run.has_value() && run->help_requested, "deepest level help_requested");
+        expect(result.command_path.size() == 2, "path still recorded");
+    }
+    TEST_PASS("nested auto help");
+}
+
+TEST_CASE("test_subcmd_custom_help_wins") {
+    {
+        const char* argv[] = {"prog", "solve", "--help"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(result.diagnostics.empty(), "custom help parses clean");
+        auto& sub = std::get<2>(result.value);
+        expect(sub.has_value() && !sub->help_requested, "custom help flag, not auto");
+        expect(std::get<1>(sub->value) == true, "solve's --help flag set");
+    }
+    {
+        const char* argv[] = {"prog", "solve", "-h"};
+        auto result = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 3));
+        auto& sub = std::get<2>(result.value);
+        expect(std::get<1>(sub->value) == true, "solve's -h flag set");
+    }
+    TEST_PASS("custom help wins over auto");
+}
+
+TEST_CASE("test_subcmd_legacy_gate") {
+    // 无命令的表：裸 --help 保持旧行为 unknown_option，绝不置 help_requested
+    const char* argv[] = {"prog", "--help"};
+    auto result = CLIParser(NOHELP_OPTS).parse(std::span<const char*>(argv, 2));
+    expect(!result.help_requested, "legacy gate: no auto help");
+    expect(has_diag(result.diagnostics, ParseErrorCode::unknown_option), "legacy bare --help stays unknown_option");
+    TEST_PASS("legacy gate");
+}

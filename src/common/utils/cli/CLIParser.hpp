@@ -82,6 +82,11 @@ bool has_commands(const std::tuple<Entries...>& tup) noexcept {
 }
 
 template<typename... Entries>
+bool has_help_entry(const std::tuple<Entries...>& tup) noexcept {
+    return find_by_long_name(tup, "help") >= 0 || find_by_short_name(tup, 'h') >= 0;
+}
+
+template<typename... Entries>
 void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup, size_t index,
                         std::string_view val, std::vector<Diagnostic>& diags,
                         std::string_view opt) {
@@ -140,12 +145,19 @@ std::vector<std::string_view> parse_tokens_impl(
     auto& tup = out.value;
     const auto& entries = table.entries;
     const bool cmds = detail::has_commands(entries);
+    const bool auto_help = (cmds || is_sub_level) && !detail::has_help_entry(entries);
     out.command_path = parent_path;
 
     bool ended = false;
     for (size_t i = 0; i < tokens.size(); ++i) {
         std::string_view a(tokens[i]);
         if (a == "--") { ended = true; continue; }
+
+        // ── 自动 --help：仅精确 token；表自定义 --help/-h 优先 ──
+        if (auto_help && (a == "--help" || a == "-h")) {
+            out.help_requested = true;
+            return out.command_path;
+        }
 
         // ── 非选项 token ──
         if (ended || !(a.size() >= 2 && a[0] == '-')) {
