@@ -324,6 +324,8 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
         std::vector<GroupEntry> gs;
         [&]<size_t... Is>(std::index_sequence<Is...>) {
             (([&]{
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) return;
                 const auto& e = std::get<Is>(entries);
                 std::string_view g;
                 if constexpr (requires { e.help_group; }) g = e.help_group;
@@ -339,8 +341,9 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
         r += "  --- "; r += trans(gname); r += " ---\n";
         [&]<size_t... Is>(std::index_sequence<Is...>) {
             (([&]{
-                const auto& e = std::get<Is>(entries);
                 using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) return;
+                const auto& e = std::get<Is>(entries);
                 std::string_view eg;
                 if constexpr (requires { e.help_group; }) eg = e.help_group;
                 if (eg != gname) return;
@@ -375,6 +378,8 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
     bool has_ungrouped = false;
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         (([&]{
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (is_command<ET>::value) return;
             const auto& e = std::get<Is>(entries);
             std::string_view eg;
             if constexpr (requires { e.help_group; }) eg = e.help_group;
@@ -385,8 +390,9 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
         if (!groups.empty()) r += '\n';
         [&]<size_t... Is>(std::index_sequence<Is...>) {
             (([&]{
-                const auto& e = std::get<Is>(entries);
                 using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) return;
+                const auto& e = std::get<Is>(entries);
                 std::string_view eg;
                 if constexpr (requires { e.help_group; }) eg = e.help_group;
                 if (!eg.empty()) return;
@@ -470,7 +476,6 @@ std::string format_help_path(std::string_view prog, std::span<const std::string_
         ((idx == static_cast<int>(Is) ? [&]() -> bool {
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
             if constexpr (is_command<ET>::value) {
-                using T = typename command_entries<ET>::table_type;
                 r = format_help_path<RootEntries...>(child_prog, path.subspan(1),
                                                      std::get<Is>(table.entries).table,
                                                      trans, root_prog, root);

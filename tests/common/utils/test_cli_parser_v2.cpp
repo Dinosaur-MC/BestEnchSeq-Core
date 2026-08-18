@@ -326,6 +326,10 @@ TEST_CASE("test_subcmd_help_commands_section") {
     expect(help.find("Run the HTTP server") != std::string::npos, "command help text rendered");
     expect(help.find("<command>") != std::string::npos, "usage mentions <command>");
     expect(help.find("--host") == std::string::npos, "nested options NOT in top help");
+    // 回归：Commands 段只渲染一次 —— §2 选项分组渲染器不得再渲染 Command 条目
+    size_t count = 0, pos = 0;
+    while ((pos = help.find("--- Commands ---", pos)) != std::string::npos) { ++count; pos += 17; }
+    expect(count == 1, "Commands section appears exactly once");
     TEST_PASS("commands section in top help");
 }
 
