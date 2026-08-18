@@ -16,6 +16,8 @@ std::string cli::DefaultDiagnosticFormatter::operator()(const Diagnostic& d) con
             return "error: required option '--" + d.option_name.value_or("") + "' is missing";
         case unexpected_positional:
             return "error: unexpected positional argument '" + std::string(d.arg) + "'";
+        case unknown_command:
+            return "error: unknown command '" + std::string(d.arg) + "'";
         default:
             return "error: unknown parse error";
     }

@@ -314,3 +314,12 @@ TEST_CASE("test_subcmd_type_layer") {
     expect(std::get<0>(leaf.entries).name == "leaf", "leaf command table constructs and validates");
     TEST_PASS("subcmd type layer");
 }
+
+TEST_CASE("test_subcmd_unknown_command_formatter") {
+    DefaultDiagnosticFormatter fmt;
+    Diagnostic d{ParseErrorCode::unknown_command, "frob", {}};
+    std::string msg = fmt(d);
+    expect(msg.find("unknown command") != std::string::npos, "formatter mentions 'unknown command'");
+    expect(msg.find("frob") != std::string::npos, "formatter includes the command name");
+    TEST_PASS("unknown_command formatter");
+}
