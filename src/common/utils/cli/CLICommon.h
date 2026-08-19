@@ -80,6 +80,7 @@ template<Parsable T>
 struct Option {
     using value_type = T;
     std::string_view  long_name;
+    std::string_view  alt_long = {};   ///< 第二长名（可空；帮助不显示）
     char              short_name = '\0';
     std::string_view  help_key;
     std::string_view  help_group;
@@ -165,6 +166,14 @@ private:
         if constexpr (is_command<std::decay_t<decltype(e)>>::value) return e.name;
         else return {};
     }
+    static constexpr std::string_view entry_command_alias(const auto& e) noexcept {
+        if constexpr (is_command<std::decay_t<decltype(e)>>::value) return e.alias;
+        else return {};
+    }
+    static constexpr std::string_view entry_alt_long(const auto& e) noexcept {
+        if constexpr (requires { e.alt_long; }) return e.alt_long;
+        else return {};
+    }
 
     template<size_t... Is>
     constexpr void check_unique_names(std::index_sequence<Is...>) const noexcept {
@@ -201,6 +210,53 @@ private:
                     std::terminate();
                 }
         }
+
+        // ── command aliases: non-empty → != own name, unique vs all names/aliases ──
+        const auto cmd_aliases = std::array<std::string_view, sizeof...(Is)>{
+            entry_command_alias(std::get<Is>(entries))... };
+        for (size_t i = 0; i < cmd_aliases.size(); ++i) {
+            if (cmd_aliases[i].empty()) continue;
+            if (cmd_aliases[i] == cmd_names[i]) {
+                std::fprintf(stderr, "OptionTable: command alias '%.*s' equals its name\n",
+                             static_cast<int>(cmd_aliases[i].size()), cmd_aliases[i].data());
+                std::terminate();
+            }
+            for (size_t j = 0; j < cmd_names.size(); ++j) {
+                if (i != j && cmd_aliases[i] == cmd_names[j]) {
+                    std::fprintf(stderr, "OptionTable: command alias '%.*s' duplicates name\n",
+                                 static_cast<int>(cmd_aliases[i].size()), cmd_aliases[i].data());
+                    std::terminate();
+                }
+                if (i != j && !cmd_aliases[j].empty() && cmd_aliases[i] == cmd_aliases[j]) {
+                    std::fprintf(stderr, "OptionTable: duplicate command alias '%.*s'\n",
+                                 static_cast<int>(cmd_aliases[i].size()), cmd_aliases[i].data());
+                    std::terminate();
+                }
+            }
+        }
+        // ── alt_long: non-empty → != own long_name, unique vs all long_names/alt_longs ──
+        const auto alt_longs = std::array<std::string_view, sizeof...(Is)>{
+            entry_alt_long(std::get<Is>(entries))... };
+        for (size_t i = 0; i < alt_longs.size(); ++i) {
+            if (alt_longs[i].empty()) continue;
+            if (alt_longs[i] == long_names[i]) {
+                std::fprintf(stderr, "OptionTable: option alt_long '%.*s' equals its long_name\n",
+                             static_cast<int>(alt_longs[i].size()), alt_longs[i].data());
+                std::terminate();
+            }
+            for (size_t j = 0; j < long_names.size(); ++j) {
+                if (i != j && alt_longs[i] == long_names[j]) {
+                    std::fprintf(stderr, "OptionTable: option alt_long '%.*s' duplicates long_name\n",
+                                 static_cast<int>(alt_longs[i].size()), alt_longs[i].data());
+                    std::terminate();
+                }
+                if (i != j && !alt_longs[j].empty() && alt_longs[i] == alt_longs[j]) {
+                    std::fprintf(stderr, "OptionTable: duplicate option alt_long '%.*s'\n",
+                                 static_cast<int>(alt_longs[i].size()), alt_longs[i].data());
+                    std::terminate();
+                }
+            }
+        }
         bool empty_cmd = false;
         ([&]{
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
@@ -223,7 +279,8 @@ OptionTable(Entries...) -> OptionTable<Entries...>;
 
 template<typename... SubEntries>
 struct Command {
-    std::string_view name;                    ///< 子命令名：位置 token 精确匹配（大小写敏感）
+    std::string_view name;                    ///< 子命令名（主名）：位置 token 精确匹配（大小写敏感）
+    std::string_view alias = {};              ///< 别名（可空）；匹配别名时 command_path 记主名
     std::string_view help_key;                ///< 帮助文本（走 help_trans）
     std::string_view help_group = "Commands"; ///< 帮助分组（默认归入 Commands 段）
     OptionTable<SubEntries...> table;         ///< 独立选项表（独立 config）；叶子 Command<> 为空表

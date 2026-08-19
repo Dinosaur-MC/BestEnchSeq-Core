@@ -52,6 +52,7 @@ static const auto SUB_OPTS = OptionTable{
     },
     Command<Option<std::string>, Flag>{
         .name = "solve",
+        .alias = "calc",
         .help_key = "Solve a forging plan",
         .table = OptionTable{
             Option<std::string>{.long_name = "target", .help_key = "Target item", .required = true},
@@ -670,4 +671,61 @@ TEST_CASE("test_subcmd_legacy_gate") {
     expect(!result.help_requested, "legacy gate: no auto help");
     expect(has_diag(result.diagnostics, ParseErrorCode::unknown_option), "legacy bare --help stays unknown_option");
     TEST_PASS("legacy gate");
+}
+
+TEST_CASE("test_subcmd_alias") {
+    {
+        const char* argv[] = {"prog", "calc", "--target", "sword"};
+        auto r = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(r.ok(), "alias-selected command parses");
+        expect(r.command_path.size() == 1 && r.command_path[0] == "solve",
+               "command_path records canonical name");
+        auto& sub = std::get<2>(r.value);
+        expect(sub.has_value() && *std::get<0>(sub->value) == "sword",
+               "alias-selected command table bound");
+    }
+    {
+        const char* argv[] = {"prog", "calc"};
+        auto r = CLIParser(SUB_OPTS).parse(std::span<const char*>(argv, 2));
+        // 裸别名：命令命中、command_path 记主名；但 solve.target 必填缺失 → 不 ok
+        // （与裸 `prog solve` 一致，见 test_subcmd_nested_errors）
+        expect(r.command_path.size() == 1 && r.command_path[0] == "solve",
+               "bare alias resolves to canonical");
+        auto& sub = std::get<2>(r.value);
+        expect(sub.has_value() && has_diag(sub->diagnostics, ParseErrorCode::required_missing),
+               "bare alias -> solve selected with required_missing (same as bare solve)");
+    }
+    TEST_PASS("command alias");
+}
+
+TEST_CASE("test_subcmd_alias_help") {
+    std::string h = CLIParser(SUB_OPTS).format_help("prog");
+    expect(h.find("solve (calc)") != std::string::npos, "help shows name (alias)");
+    TEST_PASS("alias in help");
+}
+
+TEST_CASE("test_option_alt_long") {
+    const auto ALT_OPTS = OptionTable{
+        Option<std::string>{.long_name = "algorithm", .alt_long = "algo", .help_key = "Algo"},
+        Option<std::string>{.long_name = "target", .help_key = "Target"},
+    };
+    {
+        const char* argv[] = {"prog", "--algo", "hamming", "--target", "x"};
+        auto r = CLIParser(ALT_OPTS).parse(std::span<const char*>(argv, 5));
+        expect(r.diagnostics.empty() && *std::get<0>(r.value) == "hamming",
+               "--algo binds via alt_long");
+    }
+    {
+        const char* argv[] = {"prog", "--algorithm", "hamming"};
+        auto r = CLIParser(ALT_OPTS).parse(std::span<const char*>(argv, 3));
+        expect(*std::get<0>(r.value) == "hamming", "main long name still works");
+    }
+    {
+        // 同一 idx 的重复检测对 alt_long 同样生效（--algo 与 --algorithm 同槽）
+        const char* argv[] = {"prog", "--algorithm", "a", "--algo", "b"};
+        auto r = CLIParser(ALT_OPTS).parse(std::span<const char*>(argv, 5));
+        expect(has_diag(r.diagnostics, ParseErrorCode::duplicate_option),
+               "alt_long and main name share the slot -> duplicate_option");
+    }
+    TEST_PASS("option alt_long");
 }

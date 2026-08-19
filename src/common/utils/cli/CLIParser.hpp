@@ -34,7 +34,11 @@ int find_by_long_name(const std::tuple<Entries...>& tup, std::string_view name) 
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         (([&]() -> bool {
             const auto& e = std::get<Is>(tup);
-            if constexpr (requires { e.long_name; }) { if (e.long_name == name) { r = static_cast<int>(Is); return false; } }
+            if constexpr (requires { e.long_name; }) {
+                if (e.long_name == name) { r = static_cast<int>(Is); return false; }
+                if constexpr (requires { e.alt_long; })
+                    if (!e.alt_long.empty() && e.alt_long == name) { r = static_cast<int>(Is); return false; }
+            }
             return true;
         }()) && ...);
     }(std::index_sequence_for<Entries...>{});
@@ -62,7 +66,7 @@ int find_command_by_name(const std::tuple<Entries...>& tup, std::string_view nam
         (([&]() -> bool {
             const auto& e = std::get<Is>(tup);
             if constexpr (is_command<std::decay_t<decltype(e)>>::value)
-                if (e.name == name) { r = static_cast<int>(Is); return false; }
+                if (e.name == name || (!e.alias.empty() && e.alias == name)) { r = static_cast<int>(Is); return false; }
             return true;
         }()) && ...);
     }(std::index_sequence_for<Entries...>{});
@@ -176,14 +180,15 @@ std::vector<std::string_view> parse_tokens_impl(
             if (!ended && cmds) {
                 const int cidx = detail::find_command_by_name(entries, a);
                 if (cidx >= 0) {
-                    std::vector<std::string_view> path = parent_path;
-                    path.push_back(a);
-                    out.command_path = path;
+                    out.command_path = parent_path;
                     [&]<size_t... Is>(std::index_sequence<Is...>) {
                         ((cidx == static_cast<int>(Is) ? [&]() -> bool {
                             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
                             if constexpr (is_command<ET>::value) {
                                 using R = typename command_entries<ET>::result_type;
+                                std::vector<std::string_view> path = parent_path;
+                                path.push_back(std::get<Is>(entries).name);   // 主名（别名命中亦然）
+                                out.command_path = path;
                                 R sub;
                                 out.command_path = detail::parse_tokens_impl(
                                     tokens.subspan(i + 1), std::get<Is>(entries).table, sub, true, path, diag_trans);
@@ -470,6 +475,7 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
                     if (e.help_group != gname) return;
                     std::string l = "  ";
                     l += e.name;
+                    if (!e.alias.empty()) { l += " ("; l += e.alias; l += ")"; }
                     while (l.size() < 28) l += ' ';
                     l += trans(e.help_key);
                     l += '\n'; r += l;
