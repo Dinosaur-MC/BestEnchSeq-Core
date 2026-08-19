@@ -68,7 +68,15 @@ TEST_CASE("sql_parser_errors") {
     auto r3 = p3.parse("SELECT FROM enchantment;");
     expect(r3.empty() && !p3.error.empty(), "missing cols rejected");
     SqlParser p4;
-    auto r4 = p4.parse("UPDATE x SET a=1;"); // 无 WHERE
-    expect(r4.empty(), "UPDATE without WHERE rejected at parse (slice1 rule)");
+    auto r4 = p4.parse("UPDATE equipment SET max_durability=1;");
+    expect(r4.empty() && !p4.error.empty(), "UPDATE without WHERE rejected");
+    SqlParser p5;
+    auto r5 = p5.parse("DELETE FROM tags;");
+    expect(r5.empty() && !p5.error.empty(), "DELETE without WHERE rejected");
+    SqlParser p6;
+    auto r6 = p6.parse("UPDATE equipment SET max_durability=1 WHERE true;");
+    expect(r6.size() == 1, "WHERE true accepted");
+    const auto& u = std::get<UpdateStmt>(r6[0]);
+    expect(u.where.size() == 1 && u.where[0].col.empty(), "match-all sentinel");
     TEST_PASS("parser errors");
 }

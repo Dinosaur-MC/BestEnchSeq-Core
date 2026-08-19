@@ -300,6 +300,16 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
 
 std::vector<WhereCond> SqlParser::parse_where() {
     std::vector<WhereCond> out;
+    SqlToken first = peek();
+    if (first.kind == SqlToken::Kind::bool_ && first.text == "true") {
+        // 哨兵：WHERE true = 匹配全部行；单条件，不允许再跟 AND
+        take();
+        out.push_back(WhereCond{"", "true"});
+        if (lower(peek().text) == "and") {
+            fail("WHERE true matches all rows; cannot combine with AND");
+        }
+        return out;
+    }
     while (true) {
         if (peek().kind != SqlToken::Kind::ident) {
             fail("expected condition column");

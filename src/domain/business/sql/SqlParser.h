@@ -12,6 +12,7 @@ namespace business::sql {
 struct WhereCond {
     std::string col;
     std::string val;
+    // 哨兵（WHERE true）：col.empty() && val=="true" = 匹配全部行（执行器 Task 2/3 须遵守）
 };
 
 struct SelectStmt {
