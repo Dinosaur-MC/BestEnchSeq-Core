@@ -24,6 +24,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
+#include <utility>
 
 // ============================================================================
 // CLIApp — Application runner
@@ -756,6 +758,16 @@ const auto BESQ_OPTIONS = OptionTable{
         .name = "serve", .help_key = "cli.cmd.serve_desc", .table = SERVE_OPTS,
     },
 };
+
+// ── 编译期守卫：solve 命令表与顶层表前 20 项条目类型序列必须一致 ──
+template<size_t... Is>
+static constexpr bool solve_segment_matches(std::index_sequence<Is...>) {
+    return (std::is_same_v<
+                std::tuple_element_t<Is, decltype(SOLVE_CMD_OPTS.entries)>,
+                std::tuple_element_t<Is, decltype(BESQ_OPTIONS.entries)>> && ...);
+}
+static_assert(solve_segment_matches(std::make_index_sequence<20>{}),
+              "SOLVE_CMD_OPTS must match the first 20 entries of BESQ_OPTIONS");
 
 } // anonymous namespace
 

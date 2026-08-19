@@ -39,7 +39,6 @@ public:
         std::string algo_opt_pairs;
         std::optional<std::string> input;
         std::optional<std::string> output;
-        std::optional<std::string> import_files;  // 保留（永不绑定）：test_cli_parser 仍引用；--import 迁至 profile 子命令（Task 5）
         std::optional<std::string> profile;
         std::optional<std::string> resume;
         std::string platform = "auto";
