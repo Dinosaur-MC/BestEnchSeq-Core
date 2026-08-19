@@ -1140,3 +1140,22 @@ TEST_CASE("cli_slice2a_inspect_behavior") {
     }
     TEST_PASS("slice2a inspect behavior");
 }
+
+TEST_CASE("cli_slice2a_algo_inspect") {
+    {
+        const char* argv[] = {"besq", "algo", "inspect", "dp_merge"};
+        auto cfg = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(cfg.algo_action == CLIApp::Config::AlgoAction::inspect && cfg.algo_target == "dp_merge",
+               "algo inspect parse");
+    }
+    {
+        const char* argv[] = {"besq", "algo", "inspect", "dp_merge", "--format", "json"};
+        int rc = CLIApp().run(6, const_cast<char**>(argv));
+        expect(rc == 0, "algo inspect json exit 0");
+    }
+    {
+        const char* argv[] = {"besq", "algo", "inspect", "nope_nope"};
+        expect_throws([&] { CLIApp().run(4, const_cast<char**>(argv)); }, "unknown algo throws");
+    }
+    TEST_PASS("algo inspect");
+}

@@ -25,7 +25,7 @@ public:
     struct Config {
         enum class Cmd { solve, profile, algo, serve };
         enum class ProfileAction { none, list, set_dir, import, export_, info, publish, inspect };
-        enum class AlgoAction { none, list, set_dir };
+        enum class AlgoAction { none, list, set_dir, inspect };
 
         Cmd cmd = Cmd::solve;
         std::string algorithm = "dp_merge";
@@ -193,6 +193,9 @@ private:
         if (std::get<3>(v).has_value())                       cfg.algo_action = Config::AlgoAction::list;
         else if (std::get<4>(v).has_value()) {                cfg.algo_action = Config::AlgoAction::set_dir;
             cfg.algo_target = std::get<0>(std::get<4>(v)->value).value_or(Config{}.algo_target); }
+        else if (std::get<5>(v).has_value()) {                cfg.algo_action = Config::AlgoAction::inspect;
+            cfg.algo_target = std::get<0>(std::get<5>(v)->value).value_or(Config{}.algo_target);
+            cfg.inspect_format = std::get<1>(std::get<5>(v)->value).value_or(Config{}.inspect_format); }
         return cfg;
     }
 

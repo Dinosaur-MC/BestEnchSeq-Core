@@ -540,6 +540,45 @@ int CLIApp::run_algo(const Config& config) {
             flush_output();
             return 0;
         }
+        case Config::AlgoAction::inspect: {
+            if (config.inspect_format != "text" && config.inspect_format != "json")
+                throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.inspect_format));
+            const std::string algo_dir = AppConfig::get().algo_dir;
+            if (std::filesystem::is_directory(algo_dir))
+                _ctx.load_algorithms(algo_dir);
+            AlgorithmDetail d;
+            try {
+                d = _ctx.algorithm_detail(config.algo_target);
+            } catch (const std::exception&) {
+                auto algos = _ctx.list_algorithms();
+                throw std::runtime_error(tr_fmt("pipeline.err.unknown_algo",
+                    config.algo_target, string_utils::join(algos, ", ")));
+            }
+            if (config.inspect_format == "json") {
+                Json o = Json::object();
+                o["name"] = Json(d.name);
+                o["version"] = Json(d.version);
+                o["origin"] = Json(d.origin == AlgorithmOrigin::builtin ? "builtin" : "plugin");
+                if (!d.plugin_path.empty()) o["plugin_path"] = Json(d.plugin_path);
+                o["is_resumable"] = Json(d.is_resumable);
+                o["supported_mode"] = Json(d.supported_mode);
+                o["has_audit"] = Json(d.has_audit);
+                if (d.predicted_sec.has_value()) o["predicted_sec"] = Json(*d.predicted_sec);
+                std::cout << o.to_string() << "\n";
+            } else {
+                std::cout << "name: " << d.name << "\n";
+                std::cout << "version: " << d.version << "\n";
+                std::cout << "origin: " << (d.origin == AlgorithmOrigin::builtin ? "builtin" : "plugin") << "\n";
+                if (!d.plugin_path.empty()) std::cout << "plugin_path: " << d.plugin_path << "\n";
+                std::cout << "is_resumable: " << (d.is_resumable ? "true" : "false") << "\n";
+                std::cout << "supported_mode: " << d.supported_mode << "\n";
+                std::cout << "has_audit: " << (d.has_audit ? "true" : "false") << "\n";
+                if (d.predicted_sec.has_value())
+                    std::cout << "predicted_sec: " << *d.predicted_sec << "\n";
+            }
+            flush_output();
+            return 0;
+        }
         default:
             // 无动作（如 `besq algo` 裸命令）不再静默成功——按解析失败处理
             throw std::runtime_error(tr("cli.err.parse_failed"));
@@ -588,6 +627,12 @@ const auto ALGO_OPTS = OptionTable{
     Command<>{.name = "list", .help_key = "cli.cmd.list_desc"},
     Command<Positional<std::string>>{.name = "set_dir", .help_key = "cli.cmd.set_dir_desc",
         .table = OptionTable{Positional<std::string>{.name = "dir", .help_key = "cli.help.dir_desc"}}},
+    Command<Positional<std::string>, Option<std::string>>{
+        .name = "inspect", .help_key = "cli.cmd.inspect_desc",
+        .table = OptionTable{
+            Positional<std::string>{.name = "algo", .help_key = "cli.help.algorithm_desc"},
+            Option<std::string>{.long_name = "format", .help_key = "cli.help.format_desc", .default_v = std::string("text")},
+        }},
 };
 
 // ── profile 表 ──
@@ -684,7 +729,7 @@ const auto BESQ_OPTIONS = OptionTable{
     Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>, Positional<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>>{
         .name = "profile", .help_key = "cli.cmd.profile_desc", .table = PROFILE_OPTS,
     },
-    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>>{
+    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>>>{
         .name = "algo", .alias = "algorithm", .help_key = "cli.cmd.algo_desc", .table = ALGO_OPTS,
     },
     Command<Flag, Flag, Flag, Option<std::string>, Option<unsigned int>, Option<unsigned int>, Option<std::string>>{
