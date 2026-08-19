@@ -153,6 +153,11 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
+    // Slice 1: profile/algo/serve subcommands parse + validate only — their
+    // execution lands in Task 5 (run_profile / run_algo / serve dispatch).
+    if (config.cmd != Config::Cmd::solve)
+        return 0;
+
     // 1b. --list-langs: language-only listing — NO domain auto-load (which
     //     would parse profiles/plugins and surface unrelated warnings, e.g.
     //     a broken datapack in the profiles dir).  Only the on-disk langs
@@ -172,42 +177,13 @@ int CLIApp::run(int argc, char* argv[]) {
     }
 
     // 2. Domain-wide auto-load (built-in → profiles → algorithms → langs).
-    //    Explicit --algo-dir below appends to the auto-loaded set (a later
-    //    same-name plugin replaces the earlier registration).
-    //    The info-only flags skip it and load only what they list, so a
-    //    broken profile (e.g. a bad datapack) never spams unrelated output:
-    //      --list-langs      → languages only (handled at 1b)
-    //      --list-profiles   → builtin + profiles (step 4)
-    //      --list-algorithms → builtin + algorithms (2a below)
-    if (!config.list_profiles && !config.list_algorithms)
-        _ctx.auto_load();
-
-    // 2a. --list-algorithms: auto-scan the default plugin directory
-    //     (exe-relative / BESQ_ALGO_DIR) so the list reflects what auto-load
-    //     would have loaded — without touching profiles/langs.  Missing dir
-    //     → silent.
-    if (config.list_algorithms) {
-        const std::string algo_dir = AppConfig::get().algo_dir;
-        if (std::filesystem::is_directory(algo_dir))
-            _ctx.load_algorithms(algo_dir);
-    }
-
-    // 2b. --algo-dir explicit plugin directory (appends to auto-load)
-    if (config.algo_dir)
-        _ctx.load_algorithms(*config.algo_dir);
-
-    // 3. --list-algorithms
-    if (config.list_algorithms) {
-        auto algos = _ctx.list_algorithms();
-        std::cout << tr_fmt("cli.msg.list_algorithms", algos.size()) << "\n";
-        for (const auto& name : algos)
-            std::cout << "  " << name << "\n";
-        flush_output();  // make the list durable now, not at exit-time
-        return 0;
-    }
+    //    The info-only flags that used to skip it (--list-profiles /
+    //    --list-algorithms) moved to the profile/algo subcommands (Task 5),
+    //    so the solve domain always auto-loads.
+    _ctx.auto_load();
 
     // Algorithm name early validation (U10)
-    if (!config.algorithm.empty() && !config.help && !config.version && !config.list_algorithms) {
+    if (!config.algorithm.empty() && !config.help && !config.version) {
         auto algos = _ctx.list_algorithms();
         if (std::find(algos.begin(), algos.end(), config.algorithm) == algos.end()) {
             std::string avail_str;
@@ -220,13 +196,10 @@ int CLIApp::run(int argc, char* argv[]) {
         }
     }
 
-    // 4. Profile selection
-    //    auto_load() (step 1) already scanned `<exe_dir>/profiles` (safe
-    //    no-op when missing).  --profile-dir overrides: re-scan the chosen
-    //    directory.  activate_profile must run before any --import/--edit so
-    //    those operations land in the chosen profile.
-    if (config.profile_dir)
-        _ctx.set_profiles_dir(*config.profile_dir);
+    // 3. Profile selection
+    //    auto_load() (step 2) already scanned `<exe_dir>/profiles` (safe
+    //    no-op when missing).  activate_profile must run before any
+    //    inventory solve so the task's enchantments resolve correctly.
     _ctx.load_profiles();
     if (config.profile) {
         auto members = split_profile_members(*config.profile);
@@ -237,63 +210,7 @@ int CLIApp::run(int argc, char* argv[]) {
         // 空组合 → 保持默认（builtin:vanilla）
     }
 
-    // 4b. --list-profiles (needs built-in + profiles only — already loaded
-    //     above; no algorithm/language auto-load noise).
-    if (config.list_profiles) {
-        auto profiles = _ctx.list_profiles();
-        std::cout << tr_fmt("cli.msg.list_profiles", profiles.size()) << "\n";
-        const auto actives = _ctx.active_profiles();
-        for (const auto& p : profiles) {
-            std::cout << "  " << p;
-            if (std::find(actives.begin(), actives.end(), p) != actives.end())
-                std::cout << " " << tr("cli.msg.list_profiles_active");
-            std::cout << "\n";
-        }
-        flush_output();
-        return 0;
-    }
-
-    // 组合模式是只读视图：--import/--edit 需要单 profile 写目标。
-    if (_ctx.composite_active() && (config.import_files || config.edit_ops))
-        throw std::runtime_error(tr("cli.err.composite_readonly"));
-
-    // 5. Profile data operations (target the active profile)
-    if (config.import_files) {
-        for (const auto& f : string_utils::split(*config.import_files, ','))
-            if (!f.empty())
-                _ctx.import_profile(f);
-    }
-
-    if (config.edit_ops)
-        CLIApp::apply_edits(*config.edit_ops, _ctx);
-
-    // 6. Profile export (`--export -` dumps JSON to stdout)
-    if (config.export_path) {
-        if (*config.export_path == "-") {
-            std::cout << _ctx.export_profile_to_string() << "\n";
-            flush_output();
-        } else {
-            bool ok = _ctx.export_profile(*config.export_path);
-            if (!ok) throw std::runtime_error(
-                tr_fmt("main.err.export_failed", *config.export_path));
-            LOG_INFO("%s", tr_fmt("main.msg.profile_exported", *config.export_path).c_str());
-        }
-        return 0;
-    }
-
-    // 7. Publish profile as self-contained file
-    if (config.publish) {
-        std::string version = config.publish_version.value_or("dev");
-        std::string tag     = config.publish_tag.value_or("");
-        std::string out     = config.output.value_or(*config.publish + ".json");
-        bool ok = _ctx.publish_profile(*config.publish, version, tag, out);
-        if (!ok)
-            throw std::runtime_error(tr_fmt("main.err.publish_failed", *config.publish));
-        LOG_INFO("%s", tr_fmt("main.msg.published", out).c_str());
-        return 0;
-    }
-
-    // 8. Resume from checkpoint (self-contained: no target/source needed)
+    // 4. Resume from checkpoint (self-contained: no target/source needed)
     if (config.resume) {
         auto ck = _ctx.solve_from_checkpoint(*config.resume);
         auto output = _ctx.format(ck.result, ck.mode, config.format);
@@ -309,7 +226,7 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
-    // 9. Solve
+    // 5. Solve
     if (!config.target.empty() || config.input) {
         SolveRequest request = CLIApp::build_solve_request(config, _ctx);
 
@@ -362,39 +279,115 @@ bool has_profile_token(int argc, char* argv[]) {
     return false;
 }
 
+// ── serve 表 ──
+const auto SERVE_OPTS = OptionTable{
+    Flag{.long_name = "help",    .short_name = 'h', .help_key = "cli.help.help_desc",    .help_group = "cli.help.group_info"},
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "cli.help.verbose_desc", .help_group = "cli.help.group_output"},
+    Flag{.long_name = "version", .short_name = 'V', .help_key = "cli.help.version_desc", .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "host",    .help_key = "cli.help.host_desc",    .help_group = "cli.help.group_platform"},
+    Option<unsigned int>{.long_name = "port",    .help_key = "cli.help.port_desc",    .help_group = "cli.help.group_platform", .default_v = 0u},
+    Option<unsigned int>{.long_name = "workers", .help_key = "cli.help.workers_desc", .help_group = "cli.help.group_platform"},
+    Option<std::string>{.long_name = "res-dir", .help_key = "cli.help.res_dir_desc", .help_group = "cli.help.group_platform"},
+};
+
+// ── algo 表 ──
+const auto ALGO_OPTS = OptionTable{
+    Flag{.long_name = "help",    .short_name = 'h', .help_key = "cli.help.help_desc",    .help_group = "cli.help.group_info"},
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "cli.help.verbose_desc", .help_group = "cli.help.group_output"},
+    Flag{.long_name = "version", .short_name = 'V', .help_key = "cli.help.version_desc", .help_group = "cli.help.group_info"},
+    Command<>{.name = "list", .help_key = "cli.cmd.list_desc"},
+    Command<Positional<std::string>>{.name = "set_dir", .help_key = "cli.cmd.set_dir_desc",
+        .table = OptionTable{Positional<std::string>{.name = "dir", .help_key = "cli.help.dir_desc"}}},
+};
+
+// ── profile 表 ──
+const auto PROFILE_OPTS = OptionTable{
+    Flag{.long_name = "help",    .short_name = 'h', .help_key = "cli.help.help_desc",    .help_group = "cli.help.group_info"},
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "cli.help.verbose_desc", .help_group = "cli.help.group_output"},
+    Flag{.long_name = "version", .short_name = 'V', .help_key = "cli.help.version_desc", .help_group = "cli.help.group_info"},
+    Command<>{.name = "list", .help_key = "cli.cmd.list_desc"},
+    Command<Positional<std::string>>{.name = "set_dir", .help_key = "cli.cmd.set_dir_desc",
+        .table = OptionTable{Positional<std::string>{.name = "dir", .help_key = "cli.help.dir_desc"}}},
+    Command<Positional<std::string>>{.name = "import", .help_key = "cli.cmd.import_desc",
+        .table = OptionTable{Positional<std::string>{.name = "file", .help_key = "cli.help.file_desc"}}},
+    Command<Option<std::string>, Option<std::string>, Option<std::string>>{
+        .name = "export", .help_key = "cli.cmd.export_desc",
+        .table = OptionTable{
+            Option<std::string>{.long_name = "profile", .help_key = "cli.help.profile_desc"},
+            Option<std::string>{.long_name = "file",    .help_key = "cli.help.file_desc"},
+            Option<std::string>{.long_name = "format",  .help_key = "cli.help.export_format_desc", .default_v = std::string("json")},
+        }},
+    Command<Positional<std::string>>{.name = "info", .help_key = "cli.cmd.info_desc",
+        .table = OptionTable{Positional<std::string>{.name = "profile", .help_key = "cli.help.profile_desc"}}},
+    Command<Positional<std::string>, Option<std::string>, Option<std::string>>{
+        .name = "publish", .help_key = "cli.cmd.publish_desc",
+        .table = OptionTable{
+            Positional<std::string>{.name = "profile", .help_key = "cli.help.profile_desc"},
+            Option<std::string>{.long_name = "version", .help_key = "cli.help.publish_version_desc"},
+            Option<std::string>{.long_name = "tag",     .help_key = "cli.help.publish_tag_desc"},
+        }},
+};
+
+// ── solve 命令表 = 顶层表的前 20 项（全局三项 + list-langs + lang + 16 solve 选项）──
+const auto SOLVE_CMD_OPTS = OptionTable{
+    Flag{.long_name = "help",    .short_name = 'h', .help_key = "cli.help.help_desc",    .help_group = "cli.help.group_info"},
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "cli.help.verbose_desc", .help_group = "cli.help.group_output"},
+    Flag{.long_name = "version", .short_name = 'V', .help_key = "cli.help.version_desc", .help_group = "cli.help.group_info"},
+    Flag{.long_name = "list-langs", .help_key = "cli.help.list_langs_desc", .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "lang", .help_key = "cli.help.lang_desc", .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "algorithm", .alt_long = "algo", .help_key = "cli.help.algorithm_desc", .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "target", .short_name = 't', .help_key = "cli.help.target_desc", .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "source", .short_name = 's', .help_key = "cli.help.source_desc", .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "platform", .alt_long = "mce", .help_key = "cli.help.platform_desc", .help_group = "cli.help.group_platform", .default_v = std::string("auto")},
+    Option<std::string>{.long_name = "format", .short_name = 'f', .help_key = "cli.help.format_desc", .help_group = "cli.help.group_output", .default_v = std::string("text")},
+    Option<int>{.long_name = "solutions", .short_name = 'n', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
+    Option<std::string>{.long_name = "memory", .help_key = "cli.help.memory_desc", .help_group = "cli.help.group_advanced"},
+    Option<int>{.long_name = "max-time", .help_key = "cli.help.max_time_desc", .help_group = "cli.help.group_advanced"},
+    Option<int>{.long_name = "max-threads", .short_name = 'j', .help_key = "cli.help.max_threads_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "algo-opt", .help_key = "cli.help.algo_opt_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "input", .short_name = 'i', .help_key = "cli.help.input_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "output", .short_name = 'o', .help_key = "cli.help.output_desc", .help_group = "cli.help.group_output"},
+    Option<std::string>{.long_name = "resume", .help_key = "cli.help.resume_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "config", .short_name = 'c', .help_key = "cli.help.config_desc", .help_group = "cli.help.group_platform"},
+    Option<std::string>{.long_name = "profile", .help_key = "cli.help.profile_desc", .help_group = "cli.help.group_profile", .default_v = std::string("builtin:vanilla")},
+};
+
+// ── 顶层表（= solve，默认）：SOLVE_CMD_OPTS 同布局 + 4 个命令条目 ──
 const auto BESQ_OPTIONS = OptionTable{
-    // ── basic ──
-    Flag    {.long_name = "help",              .short_name = 'h', .help_key = "cli.help.help_desc",            .help_group = "cli.help.group_basic"},
-    Flag    {.long_name = "verbose",           .short_name = 'v', .help_key = "cli.help.verbose_desc",         .help_group = "cli.help.group_output"},
-    Flag    {.long_name = "version",           .short_name = 'V', .help_key = "cli.help.version_desc",         .help_group = "cli.help.group_info"},
-    Flag    {.long_name = "list-algorithms",                            .help_key = "List available algorithms", .help_group = "cli.help.group_info"},
-    Option<std::string>{.long_name = "algorithm",                       .help_key = "cli.help.algorithm_desc",  .help_group = "cli.help.group_basic"},
-    Option<std::string>{.long_name = "target",                          .help_key = "cli.help.target_desc",     .help_group = "cli.help.group_basic"},
-    Option<std::string>{.long_name = "source",                          .help_key = "cli.help.source_desc",     .help_group = "cli.help.group_basic"},
-    Option<std::string>{.long_name = "mode",                            .help_key = "cli.help.mode_desc",       .help_group = "cli.help.group_basic",  .default_v = std::string("direct")},
-    Option<std::string>{.long_name = "platform",                        .help_key = "cli.help.platform_desc",   .help_group = "cli.help.group_platform", .default_v = std::string("auto")},
-    Option<std::string>{.long_name = "format",                          .help_key = "cli.help.format_desc",     .help_group = "cli.help.group_output", .default_v = std::string("text")},
-    Option<std::string>{.long_name = "lang",                            .help_key = "cli.help.lang_desc",       .help_group = "cli.help.group_info"},
-    Option<std::string>{.long_name = "input",                           .help_key = "cli.help.input_desc",      .help_group = "cli.help.group_advanced"},
-    Option<std::string>{.long_name = "output",                          .help_key = "cli.help.output_desc",     .help_group = "cli.help.group_output"},
-    Option<std::string>{.long_name = "import",                          .help_key = "cli.help.import_desc",     .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "edit",                            .help_key = "cli.help.edit_desc",       .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "export",                          .help_key = "cli.help.export_desc",     .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "algo-dir",                        .help_key = "cli.help.algo_dir_desc",   .help_group = "cli.help.group_advanced"},
-    Option<std::string>{.long_name = "config",                          .help_key = "cli.help.config_desc",     .help_group = "cli.help.group_platform"},
-    Option<int>        {.long_name = "solutions",          .short_name = 's', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
-    Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
-    Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
-    Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "cli.help.max_threads_desc", .help_group = "cli.help.group_advanced"},
-    Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_profile", .default_v = std::string("builtin:vanilla")},
-    Option<std::string>{.long_name = "profile-dir",      .help_key = "cli.help.profile_dir_desc",   .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "publish",          .help_key = "cli.help.publish_desc",       .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_profile"},
-    Option<std::string>{.long_name = "algo-opt",         .help_key = "cli.help.algo_opt_desc",      .help_group = "cli.help.group_advanced"},
-    Option<std::string>{.long_name = "resume",           .help_key = "cli.help.resume_desc",        .help_group = "cli.help.group_advanced"},
-    Flag    {.long_name = "list-profiles",               .help_key = "cli.help.list_profiles_desc", .help_group = "cli.help.group_info"},
-    Flag    {.long_name = "list-langs",                  .help_key = "cli.help.list_langs_desc",    .help_group = "cli.help.group_info"},
+    Flag{.long_name = "help",    .short_name = 'h', .help_key = "cli.help.help_desc",    .help_group = "cli.help.group_info"},
+    Flag{.long_name = "verbose", .short_name = 'v', .help_key = "cli.help.verbose_desc", .help_group = "cli.help.group_output"},
+    Flag{.long_name = "version", .short_name = 'V', .help_key = "cli.help.version_desc", .help_group = "cli.help.group_info"},
+    Flag{.long_name = "list-langs", .help_key = "cli.help.list_langs_desc", .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "lang", .help_key = "cli.help.lang_desc", .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "algorithm", .alt_long = "algo", .help_key = "cli.help.algorithm_desc", .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "target", .short_name = 't', .help_key = "cli.help.target_desc", .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "source", .short_name = 's', .help_key = "cli.help.source_desc", .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "platform", .alt_long = "mce", .help_key = "cli.help.platform_desc", .help_group = "cli.help.group_platform", .default_v = std::string("auto")},
+    Option<std::string>{.long_name = "format", .short_name = 'f', .help_key = "cli.help.format_desc", .help_group = "cli.help.group_output", .default_v = std::string("text")},
+    Option<int>{.long_name = "solutions", .short_name = 'n', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
+    Option<std::string>{.long_name = "memory", .help_key = "cli.help.memory_desc", .help_group = "cli.help.group_advanced"},
+    Option<int>{.long_name = "max-time", .help_key = "cli.help.max_time_desc", .help_group = "cli.help.group_advanced"},
+    Option<int>{.long_name = "max-threads", .short_name = 'j', .help_key = "cli.help.max_threads_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "algo-opt", .help_key = "cli.help.algo_opt_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "input", .short_name = 'i', .help_key = "cli.help.input_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "output", .short_name = 'o', .help_key = "cli.help.output_desc", .help_group = "cli.help.group_output"},
+    Option<std::string>{.long_name = "resume", .help_key = "cli.help.resume_desc", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "config", .short_name = 'c', .help_key = "cli.help.config_desc", .help_group = "cli.help.group_platform"},
+    Option<std::string>{.long_name = "profile", .help_key = "cli.help.profile_desc", .help_group = "cli.help.group_profile", .default_v = std::string("builtin:vanilla")},
+    // ── 命令（索引 20-23）──
+    Command<Flag, Flag, Flag, Flag, Option<std::string>, Option<std::string>, Option<std::string>, Option<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<std::string>, Option<int>, Option<int>, Option<std::string>, Option<std::string>, Option<std::string>, Option<std::string>, Option<std::string>, Option<std::string>>{
+        .name = "solve", .alias = "calc", .help_key = "cli.cmd.solve_desc",
+        .table = SOLVE_CMD_OPTS,
+    },
+    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>>{
+        .name = "profile", .help_key = "cli.cmd.profile_desc", .table = PROFILE_OPTS,
+    },
+    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>>{
+        .name = "algo", .alias = "algorithm", .help_key = "cli.cmd.algo_desc", .table = ALGO_OPTS,
+    },
+    Command<Flag, Flag, Flag, Option<std::string>, Option<unsigned int>, Option<unsigned int>, Option<std::string>>{
+        .name = "serve", .help_key = "cli.cmd.serve_desc", .table = SERVE_OPTS,
+    },
 };
 
 } // anonymous namespace
@@ -464,56 +457,16 @@ std::string CLIApp::help_text(std::string_view program_name) {
 // Main CLI argument parsing
 // ============================================================================
 
-CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
-    std::string prog = argc > 0 ? argv[0] : "besq";
+namespace {
 
-    auto cli_parser = cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{});
-    auto result = cli_parser.parse(
-        std::span<const char*>((const char**)argv, argc));
-
-    if (!result.diagnostics.empty()) {
-        Config early_cfg = bind(result);
-
-        if (early_cfg.help) {
-            return early_cfg;
-        }
-        if (early_cfg.version) {
-            return early_cfg;
-        }
-
-        for (auto& msg : result.messages)
-            std::cerr << msg << std::endl;
-
-        for (auto& d : result.diagnostics) {
-            switch (d.code) {
-                case cli::ParseErrorCode::required_missing:
-                case cli::ParseErrorCode::unknown_option:
-                case cli::ParseErrorCode::invalid_value:
-                case cli::ParseErrorCode::missing_value:
-                    throw std::runtime_error(tr("cli.err.parse_failed"));
-                default: break;
-            }
-        }
-    }
-
-    Config cfg = bind(result);
-
-    // `--profile` has a default_v ("builtin:vanilla") that CLIParser applies
-    // during parse(), so the bound value cannot distinguish "omitted" from an
-    // explicit `--profile builtin:vanilla`.  Scan argv for the literal token.
-    cfg.profile_explicit = has_profile_token(argc, argv);
-
-    // Handle --help / --version for clean parses (no diagnostics)
-    if (cfg.help) {
-        return cfg;
-    }
-    if (cfg.version) {
-        return cfg;
-    }
-
-    // Post-bind: --memory (supports "auto")
+/// solve 域 post-bind：--memory 解析、--config/--algo-opt 形状、业务校验、门禁。
+/// 顶层与 solve 命令共用（两表索引 0-19 布局一致）。
+template<typename... Entries>
+void post_bind_solve(CLIApp::Config& cfg, const cli::ParseResult<Entries...>& result,
+                     int argc, char* argv[], const std::string& prog) {
+    // --memory（支持 "auto"）——原索引 19 → 11
     {
-        auto& raw_mem = std::get<19>(result.value);
+        auto& raw_mem = std::get<11>(result.value);
         if (raw_mem.has_value()) {
             if (*raw_mem == "auto") {
                 cfg.memory_mb = 0;
@@ -530,18 +483,15 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
             }
         }
     }
-
-    // Post-bind: --config (empty check)
+    // --config 空值检查——原索引 17 → 18
     {
-        auto& raw_cfg = std::get<17>(result.value);
+        auto& raw_cfg = std::get<18>(result.value);
         if (raw_cfg.has_value() && raw_cfg->empty())
             throw std::runtime_error(tr("cli.err.empty_config"));
     }
-
-    // Post-bind: --algo-opt (empty + format check; values are arbitrary
-    // strings, so only shape is validated — key ownership is strategy-defined)
+    // --algo-opt 形状检查——原索引 27 → 14
     {
-        auto& raw_opt = std::get<27>(result.value);
+        auto& raw_opt = std::get<14>(result.value);
         if (raw_opt.has_value() && raw_opt->empty())
             throw std::runtime_error(tr("cli.err.empty_algo_opt"));
         if (!cfg.algo_opt_pairs.empty()) {
@@ -552,9 +502,9 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
             }
         }
     }
-
-    // Business validation.  `--input` implies inventory mode, so an invalid
-    // --mode must be rejected on that path too.
+    // ── 业务校验（solve 域）──
+    // mode 现在由 --source 推断（build_solve_request），此处保留防御性不变式
+    //（切片 1 恒不触发；JSON 任务 schema 无 mode 字段——用户确认 invalid_mode 路径保留）。
     if (!cfg.target.empty() || cfg.input.has_value()) {
         if (cfg.mode != "direct" && cfg.mode != "inventory")
             throw std::runtime_error(tr_fmt("cli.err.invalid_mode", cfg.mode));
@@ -569,13 +519,10 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.solutions_out_of_range", BESQ_MAX_SOLUTIONS));
     if (cfg.max_time.has_value() && *cfg.max_time < 0)
         throw std::runtime_error(tr("cli.err.max_time_negative"));
-
-    // --source requires --target, EXCEPT when --input is present: inventory
-    // mode rejects --source with its own (more specific) error in
-    // build_solve_request, so the generic guard must not fire first.
+    // --source requires --target（input 模式在 build_solve_request 报更具体错误）
     if (!cfg.source.empty() && cfg.target.empty() && !cfg.input.has_value())
         throw std::runtime_error(tr("cli.err.source_without_target"));
-
+    // --config 对校验
     if (!cfg.config_pairs.empty()) {
         auto pairs = string_utils::split(cfg.config_pairs, ',');
         for (const auto& pair : pairs) {
@@ -594,47 +541,98 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
                 throw std::runtime_error(tr_fmt("cli.err.invalid_config_value", k, v));
         }
     }
-
-    if (cfg.edit_ops.has_value()) {
-        if (cfg.edit_ops->empty())
-            throw std::runtime_error(tr("cli.err.empty_edit"));
-        auto ops = string_utils::split(*cfg.edit_ops, ';');
-        for (const auto& op : ops) {
-            if (op.find(':') == std::string::npos)
-                throw std::runtime_error(tr_fmt("cli.err.invalid_edit", op));
-        }
-    }
-
-    if (cfg.algo_dir.has_value() && cfg.algo_dir->empty())
-        throw std::runtime_error(tr_fmt("cli.err.empty_algo_dir"));
-    if (cfg.export_path.has_value() && cfg.export_path->empty())
-        throw std::runtime_error(tr_fmt("cli.err.empty_export"));
+    // --resume 自包含检查（原逻辑保留）
     if (cfg.resume.has_value() && cfg.resume->empty())
         throw std::runtime_error(tr("cli.err.empty_resume"));
-    // --resume is a self-contained checkpoint: no target/source/input needed,
-    // and mixing it with them is a contradiction (the checkpoint carries its
-    // own AlgorithmInput).
     if (cfg.resume.has_value() && (!cfg.target.empty() || cfg.input.has_value()))
         throw std::runtime_error(tr("cli.err.resume_conflict"));
-
-    if (!cfg.help && !cfg.version && !cfg.list_algorithms && !cfg.list_profiles && !cfg.list_langs) {
-        if (cfg.target.empty() && !cfg.input.has_value()
-            && !cfg.export_path.has_value()
-            && !cfg.publish.has_value()
-            && !cfg.resume.has_value()) {
+    // ── 门禁：无 target/input/resume（且非 info 类）→ 报错或 brief usage ──
+    //（export/publish/list 已迁出 solve 域，不再参与门禁；brief_usage 的 flush
+    //  由 run() 出口/析构统一覆盖——flush_output 是私有静态，此处不可访问）
+    if (!cfg.help && !cfg.version && !cfg.list_langs) {
+        if (cfg.target.empty() && !cfg.input.has_value() && !cfg.resume.has_value()) {
             if (argc <= 1) {
-                // Pure no-args: show brief usage + hint, then exit cleanly
                 std::cout << tr_fmt("cli.help.usage", prog) << "\n";
-                std::cout << tr_fmt("cli.help.usage_export", prog) << "\n";
                 std::cout << tr_fmt("cli.err.try_help", prog) << "\n";
-                flush_output();
-                cfg.brief_usage = true;  // signal run() to skip further processing
+                cfg.brief_usage = true;
             } else {
-                throw std::runtime_error(tr("cli.err.missing_target_or_export"));
+                throw std::runtime_error(tr("cli.err.missing_target"));
+            }
+        }
+    }
+}
+
+/// 展平本层 + 所有嵌套命令层的诊断。命令子表的错误（如 `profile list --lang`）
+/// 只落在嵌套 ParseResult 里，顶层 diagnostics 为空——错误路径必须递归收集。
+template<typename... Entries>
+void collect_diagnostics(const cli::ParseResult<Entries...>& r, std::vector<cli::Diagnostic>& out) {
+    out.insert(out.end(), r.diagnostics.begin(), r.diagnostics.end());
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&] {
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (cli::is_command<ET>::value) {
+                const auto& v = std::get<Is>(r.value);
+                if (v.has_value()) collect_diagnostics(*v, out);
+            }
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
+}
+
+} // namespace
+
+CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
+    std::string prog = argc > 0 ? argv[0] : "besq";
+
+    auto cli_parser = cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{});
+    auto result = cli_parser.parse(std::span<const char*>((const char**)argv, argc));
+
+    // ── 分派（顶层无命令 = solve）──
+    auto dispatch = [&]() -> Config {
+        if (result.command_path.empty())
+            return bind_solve_result(result);
+        const std::string_view c0 = result.command_path.front();
+        if (c0 == "solve")        return bind_solve_result(*std::get<20>(result.value));
+        if (c0 == "profile")      return bind_profile_result(*std::get<21>(result.value));
+        if (c0 == "algo")         return bind_algo_result(*std::get<22>(result.value));
+        if (c0 == "serve")        return bind_serve_result(*std::get<23>(result.value));
+        return bind_solve_result(result);   // 不可达（命令名校验保证）
+    };
+
+    if (!result.ok()) {
+        Config early_cfg = dispatch();
+        if (early_cfg.help)  return early_cfg;
+        if (early_cfg.version) return early_cfg;
+        for (auto& msg : result.all_messages())
+            std::cerr << msg << std::endl;
+        std::vector<cli::Diagnostic> diags;
+        collect_diagnostics(result, diags);
+        for (auto& d : diags) {
+            switch (d.code) {
+                case cli::ParseErrorCode::required_missing:
+                case cli::ParseErrorCode::unknown_option:
+                case cli::ParseErrorCode::invalid_value:
+                case cli::ParseErrorCode::missing_value:
+                    throw std::runtime_error(tr("cli.err.parse_failed"));
+                default: break;
             }
         }
     }
 
+    Config cfg = dispatch();
+    if (cfg.help || cfg.version)
+        return cfg;
+
+    if (cfg.cmd == Config::Cmd::serve && cfg.serve_port > 65535)
+        throw std::runtime_error(tr_fmt("cli.err.invalid_value", std::to_string(cfg.serve_port)));
+
+    if (cfg.cmd == Config::Cmd::solve) {
+        // `--profile` 有 default_v，无法区分显式/缺省——token 扫描判定
+        cfg.profile_explicit = has_profile_token(argc, argv);
+        if (result.command_path.empty())
+            post_bind_solve(cfg, result, argc, argv, prog);
+        else
+            post_bind_solve(cfg, *std::get<20>(result.value), argc, argv, prog);
+    }
     return cfg;
 }
 

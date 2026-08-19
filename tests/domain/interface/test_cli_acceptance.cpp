@@ -46,25 +46,12 @@ private:
 
 // ---------------------------------------------------------------------------
 // Test: --export without --target is valid
+// NOTE (slice 1): --export moved to `besq profile export`; this flat-option
+// case is skipped here and migrated in Task 8 (references removed fields).
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_export_only_valid") {
-    {
-        const char* argv[] = {"besq", "--export", "out.json"};
-        auto config = CLIApp::parse(3, const_cast<char**>(argv));
-        expect(config.target.empty(), "target should be empty");
-        expect(config.export_path.has_value(), "export_path should be set");
-        expect(*config.export_path == "out.json", "path should match");
-        TEST_PASS("--export only (no --target)");
-    }
-    {
-        const char* argv[] = {"besq", "--export", "out.csv", "--verbose"};
-        auto config = CLIApp::parse(4, const_cast<char**>(argv));
-        expect(config.target.empty(), "target should be empty with --verbose");
-        expect(config.verbose, "verbose should be set");
-        expect(config.export_path.has_value(), "export_path should be set");
-        TEST_PASS("--export + --verbose (no --target)");
-    }
+    SKIP("slice1: --export moved to `profile export` — migrated in Task 8");
 }
 
 // ---------------------------------------------------------------------------
@@ -216,33 +203,12 @@ TEST_CASE("test_config_parsing") {
 
 // ---------------------------------------------------------------------------
 // Test: --edit parsing
+// NOTE (slice 1): --edit moved to the profile subcommand surface; this
+// flat-option case is skipped here and migrated in Task 8.
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_edit_parsing") {
-    {
-        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit", "ench:mod,sharpness,max_level=10"};
-        auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.edit_ops.has_value(), "edit_ops should be set");
-        TEST_PASS("--edit valid ench:mod");
-    }
-    {
-        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit",
-                              "ench:add,custom:foo,multiplier=3,max_level=5;eq:rm,diamond_sword"};
-        auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.edit_ops.has_value(), "multi-edit should be set");
-        TEST_PASS("--edit multiple ops");
-    }
-    {
-        // Missing colon in operation header
-        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit", "badformat"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Invalid --edit format should throw");
-        TEST_PASS("--edit bad format throws");
-    }
-    {
-        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit", ""};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Empty --edit should throw");
-        TEST_PASS("--edit empty throws");
-    }
+    SKIP("slice1: --edit moved to profile commands — migrated in Task 8");
 }
 
 // ---------------------------------------------------------------------------
@@ -324,29 +290,12 @@ TEST_CASE("test_memory_parsing") {
 
 // ---------------------------------------------------------------------------
 // Test: --profile / --profile-dir / --publish parsing
+// NOTE (slice 1): --profile-dir/--publish moved to `besq profile …`; this
+// flat-option case is skipped here and migrated in Task 8.
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_profile_publish_parsing") {
-    {
-        const char* argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
-        auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.profile.has_value() && *config.profile == "modpack", "profile should be 'modpack'");
-        TEST_PASS("--profile modpack");
-    }
-    {
-        const char* argv[] = {"besq", "--target", "diamond_sword", "--profile-dir", "/tmp/p"};
-        auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.profile_dir.has_value() && *config.profile_dir == "/tmp/p", "profile_dir should be '/tmp/p'");
-        TEST_PASS("--profile-dir /tmp/p");
-    }
-    {
-        const char* argv[] = {"besq", "--publish", "mypack", "--publish-version", "1.0", "--publish-tag", "stable"};
-        auto config = CLIApp::parse(7, const_cast<char**>(argv));
-        expect(config.publish.has_value() && *config.publish == "mypack", "publish should be 'mypack'");
-        expect(config.publish_version.has_value() && *config.publish_version == "1.0", "publish_version should be '1.0'");
-        expect(config.publish_tag.has_value() && *config.publish_tag == "stable", "publish_tag should be 'stable'");
-        TEST_PASS("--publish mypack --publish-version 1.0 --publish-tag stable");
-    }
+    SKIP("slice1: --profile-dir/--publish moved to `profile …` — migrated in Task 8");
 }
 
 // ---------------------------------------------------------------------------
@@ -392,16 +341,12 @@ TEST_CASE("test_resume_parsing") {
 
 // ---------------------------------------------------------------------------
 // Test: --list-profiles / --list-langs parsing (gate-exempt info flags)
+// NOTE (slice 1): --list-profiles moved to `besq profile list`; this
+// flat-option case is skipped here and migrated in Task 8.
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_list_flags_parsing") {
-    {
-        const char* argv[] = {"besq", "--list-profiles"};
-        auto config = CLIApp::parse(2, const_cast<char**>(argv));
-        expect(config.list_profiles, "--list-profiles should be set");
-        expect(config.target.empty(), "--list-profiles alone must not require --target");
-        TEST_PASS("--list-profiles parses cleanly (gate exemption)");
-    }
+    // --list-langs still lives in the solve table — keep its coverage live.
     {
         const char* argv[] = {"besq", "--list-langs"};
         auto config = CLIApp::parse(2, const_cast<char**>(argv));
@@ -409,13 +354,7 @@ TEST_CASE("test_list_flags_parsing") {
         expect(config.target.empty(), "--list-langs alone must not require --target");
         TEST_PASS("--list-langs parses cleanly (gate exemption)");
     }
-    {
-        const char* argv[] = {"besq", "--list-profiles", "--list-langs", "--verbose"};
-        auto config = CLIApp::parse(4, const_cast<char**>(argv));
-        expect(config.list_profiles && config.list_langs && config.verbose,
-               "both flags coexist");
-        TEST_PASS("--list-profiles + --list-langs coexist");
-    }
+    SKIP("slice1: --list-profiles moved to `profile list` — migrated in Task 8");
 }
 
 // ---------------------------------------------------------------------------
@@ -917,4 +856,87 @@ TEST_CASE("test_help_text") {
     expect(text.find("--profile") != std::string::npos, "help_text lists --profile");
 
     TEST_PASS("CLIApp help_text");
+}
+
+// ---------------------------------------------------------------------------
+// Slice 1: 子命令分派（solve/profile/algo/serve）+ 别名/短名
+// ---------------------------------------------------------------------------
+
+TEST_CASE("cli_slice1_dispatch") {
+    {   // 默认命令 = solve
+        const char* argv[] = {"besq", "--target", "x"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.cmd == CLIApp::Config::Cmd::solve, "bare usage -> solve");
+        expect(cfg.target == "x", "solve options bound");
+    }
+    {   // 显式 solve（含别名 calc）
+        const char* argv[] = {"besq", "solve", "--target", "x"};
+        auto cfg = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(cfg.cmd == CLIApp::Config::Cmd::solve && cfg.target == "x", "solve command");
+        const char* argv2[] = {"besq", "calc", "--target", "x"};
+        auto cfg2 = CLIApp::parse(4, const_cast<char**>(argv2));
+        expect(cfg2.cmd == CLIApp::Config::Cmd::solve && cfg2.target == "x", "calc alias");
+    }
+    {   // serve
+        const char* argv[] = {"besq", "serve", "--port", "8080", "--host", "0.0.0.0"};
+        auto cfg = CLIApp::parse(6, const_cast<char**>(argv));
+        expect(cfg.cmd == CLIApp::Config::Cmd::serve, "serve dispatch");
+        expect(cfg.serve_port == 8080u && cfg.serve_host == "0.0.0.0", "serve fields");
+    }
+    {   // serve port 越界
+        const char* argv[] = {"besq", "serve", "--port", "70000"};
+        expect_throws([&] { CLIApp::parse(4, const_cast<char**>(argv)); },
+                      "serve port > 65535 should throw");
+    }
+    {   // profile 动作
+        const char* argv[] = {"besq", "profile", "set_dir", "/tmp/p"};
+        auto cfg = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(cfg.cmd == CLIApp::Config::Cmd::profile, "profile dispatch");
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::set_dir, "set_dir action");
+        expect(cfg.profile_target == "/tmp/p", "set_dir arg");
+        const char* argv2[] = {"besq", "profile", "publish", "mypack", "--version", "1.0", "--tag", "stable"};
+        auto cfg2 = CLIApp::parse(8, const_cast<char**>(argv2));
+        expect(cfg2.profile_action == CLIApp::Config::ProfileAction::publish, "publish action");
+        expect(cfg2.profile_target == "mypack", "publish positional");
+    }
+    {   // algo
+        const char* argv[] = {"besq", "algo", "list"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.cmd == CLIApp::Config::Cmd::algo && cfg.algo_action == CLIApp::Config::AlgoAction::list, "algo list");
+        const char* argv2[] = {"besq", "algorithm", "set_dir", "/tmp/a"};
+        auto cfg2 = CLIApp::parse(4, const_cast<char**>(argv2));
+        expect(cfg2.algo_action == CLIApp::Config::AlgoAction::set_dir && cfg2.algo_target == "/tmp/a",
+               "algorithm alias + set_dir");
+    }
+    {   // 下游 --lang 报错（profile 表无 lang）
+        const char* argv[] = {"besq", "profile", "list", "--lang", "zh_CN"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                      "downstream --lang -> parse error");
+    }
+    {   // solve 命令表含 lang（= 顶层布局）
+        const char* argv[] = {"besq", "solve", "--lang", "zh_CN", "--target", "x"};
+        auto cfg = CLIApp::parse(6, const_cast<char**>(argv));
+        expect(cfg.cmd == CLIApp::Config::Cmd::solve && cfg.lang == "zh_CN", "solve table has lang");
+    }
+    TEST_PASS("slice1 dispatch");
+}
+
+TEST_CASE("cli_slice1_alt_long_and_shorts") {
+    {   // --algo / --mce 别名
+        const char* argv[] = {"besq", "--algo", "hamming", "--mce", "bedrock", "--target", "x"};
+        auto cfg = CLIApp::parse(7, const_cast<char**>(argv));
+        expect(cfg.algorithm == "hamming" && cfg.platform == "bedrock", "alt_long aliases bind");
+    }
+    {   // 新短名 -t -s -n -f -i -o -c
+        const char* argv[] = {"besq", "-t", "sword", "-s", "sharpness=5", "-n", "3", "-f", "compact"};
+        auto cfg = CLIApp::parse(9, const_cast<char**>(argv));
+        expect(cfg.target == "sword" && cfg.source == "sharpness=5", "-t -s bind");
+        expect(cfg.solutions == 3 && cfg.format == "compact", "-n -f bind");
+    }
+    {   // 旧短名 -s 语义已变更：-s 3 是 source
+        const char* argv[] = {"besq", "--target", "x", "-s", "3"};
+        auto cfg = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(cfg.source == "3", "-s now binds source");
+    }
+    TEST_PASS("slice1 alt_long and shorts");
 }
