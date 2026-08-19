@@ -16,6 +16,7 @@
 #include "AppConfig.h"
 #include "common/utils/EnvUtil.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -116,6 +117,19 @@ RunResult run_besq(const std::string& bin,
 
 void expect_contains(const std::string& haystack, const std::string& needle, const std::string& msg) {
     expect(haystack.find(needle) != std::string::npos, msg);
+}
+
+/// 跨平台唯一时间戳后缀（temp 目录唯一性）：Windows 用 GetTickCount64
+/// （test_framework.h / spawn_util.h 已含 windows.h，同 test_cli_acceptance.cpp
+/// 先例），其他平台回退 steady_clock 毫秒（保持 WSL 构建可编译）。
+static std::string unique_ts_suffix() {
+#ifdef _WIN32
+    return std::to_string(static_cast<long long>(::GetTickCount64()));
+#else
+    return std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count());
+#endif
 }
 
 // Common fast-solve flag bundle for search-path cases (bounds a hung child;
@@ -542,4 +556,57 @@ TEST_CASE("test_system_cli") {
     test_sandbox_astar(bin);
     test_sandbox_malicious_listed(bin);
     test_sandbox_worker_missing_fallback(bin);
+}
+
+// ── slice-2a 新增 e2e（独立 TEST_CASE，--filter 可按 case 粒度匹配）─────
+//
+// 注：text 形态不携带 --limit —— EnchantmentRegistry 底层是
+// std::unordered_map（"No positional index — entries are identified by NSID
+// key"，IRegistry.h），p.ench() 迭代序为哈希桶序，sharpness 不在前 5 行内；
+// --limit 分页已在 test_cli_acceptance 覆盖（--limit 3/5 + --page）。此处
+// 打印全表保证 "max_level" 表头 + sharpness 行确定性出现。
+
+TEST_CASE("system: profile inspect e2e") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    auto r = run_besq(bin, {"profile", "inspect", "builtin:vanilla", "ench"});
+    expect_eq(r.exit_code, 0, "inspect: exit 0");
+    expect_contains(r.out, "max_level", "inspect: table header");
+    expect_contains(r.out, "sharpness", "inspect: has sharpness");
+    auto rj = run_besq(bin, {"profile", "inspect", "builtin:vanilla", "ench", "--filter", "sharpness", "--format", "json"});
+    expect_eq(rj.exit_code, 0, "inspect json: exit 0");
+    expect_contains(rj.out, "\"kind\"", "inspect json: kind field");
+    expect_contains(rj.out, "sharpness", "inspect json: filtered row");
+    TEST_PASS("system: profile inspect");
+}
+
+TEST_CASE("system: algo inspect e2e") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    auto r = run_besq(bin, {"algo", "inspect", "dp_merge"});
+    expect_eq(r.exit_code, 0, "algo inspect: exit 0");
+    expect_contains(r.out, "dp_merge", "algo inspect: name");
+    TEST_PASS("system: algo inspect");
+}
+
+TEST_CASE("system: datapack export e2e") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // temp 目录导出 → 目录结构存在（ns = "builtin" 不破坏目录创建）
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_dp_sys_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    auto r = run_besq(bin, {"profile", "export", "--format", "datapack", "--file", tmp, "--profile", "builtin:vanilla"});
+    expect_eq(r.exit_code, 0, "datapack export: exit 0");
+    expect(std::filesystem::exists(tmp + "/pack.mcmeta"), "pack.mcmeta exists");
+    expect(std::filesystem::exists(tmp + "/data"), "data dir exists");
+    TEST_PASS("system: datapack export");
 }
