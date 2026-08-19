@@ -1534,6 +1534,24 @@ TEST_CASE("cli_slice_sql_chain_error") {
                    "error reports the failing statement index");
         }
     }
+    {   // review：链中止但先前语句已写入 → 抛错前 stderr 先给未保存警告
+        std::ostringstream err;
+        std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+        struct Restore { std::streambuf* e; ~Restore() { std::cerr.rdbuf(e); } } restore{oe};
+        try {
+            const char* argv[] = {"besq", "profile", "sql",
+                "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                "VALUES ('test:warn','W',1,1,'#minecraft:swords'); "
+                "SELECT nope FROM enchantment;"};
+            CLIApp().run(4, const_cast<char**>(argv));
+            expect(false, "unknown column SELECT should abort the chain");
+        } catch (const std::runtime_error& e) {
+            expect(std::string(e.what()).find("statement 2") != std::string::npos,
+                   "error reports the failing statement index");
+        }
+        expect(err.str().find("unsaved") != std::string::npos, "dirty warning printed before the error throw");
+        expect(err.str().find("builtin:vanilla") != std::string::npos, "warning names the dirty profile");
+    }
     {   // 委托：run_sql 直接验证——先前成功语句保持生效 + 脏报告 + steps 语义
         BesqContext ctx;
         ctx.load_builtin();
@@ -1560,6 +1578,15 @@ TEST_CASE("cli_slice_sql_chain_error") {
         auto r = ctx.run_sql("SELEC nope;", "builtin:vanilla", error);
         expect(!error.empty(), "parse error reported");
         expect(r.steps.empty(), "no statements executed on parse error");
+    }
+    {   // lexer 错误（未闭合字符串）→ 整体解析失败，零执行（review 修复验证）
+        BesqContext ctx;
+        ctx.load_builtin();
+        std::string error;
+        auto r = ctx.run_sql("SELECT id FROM enchantment LIMIT 1; 'unterminated", "builtin:vanilla", error);
+        expect(!error.empty(), "lexer error reported");
+        expect(error.find("lexer error") != std::string::npos, "error names lexer failure");
+        expect(r.steps.empty(), "zero execution on lexer error");
     }
     {   // 未知 profile：use() 异常 → error 通道（干净错误）
         BesqContext ctx;

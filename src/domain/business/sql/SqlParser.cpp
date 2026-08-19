@@ -295,6 +295,13 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
         if (peek().kind == SqlToken::Kind::semi)
             take();
     }
+    // lexer 错误（未闭合字符串/非法字符 → next() 置 error 并返回 end token）必须
+    // 上浮为解析错误：否则 parse 会"成功"地丢弃畸形尾部，run_sql 零执行保证被攻破。
+    // 已解析出的语句一并清空（整体输入畸形 → 返回零语句，与零执行语义一致）。
+    if (!_lx.error.empty() && error.empty()) {
+        fail("lexer error: " + _lx.error);
+        out.clear();
+    }
     return out;
 }
 

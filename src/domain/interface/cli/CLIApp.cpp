@@ -595,8 +595,14 @@ int CLIApp::run_profile(const Config& config) {
 
             std::string error;
             auto result = _ctx.run_sql(config.sql_stmt, prof, error);
-            if (!error.empty())
+            if (!error.empty()) {
+                // 链中止但先前语句已写入（脏）：先给未保存警告（stderr），再抛错误
+                // （exit 1）——否则已应用的内存变更在错误后无声消失。
+                if (!result.dirty.empty())
+                    std::cerr << tr_fmt("cli.msg.sql_unsaved",
+                                        string_utils::join(result.dirty, ", ")) << std::endl;
                 throw std::runtime_error(error);
+            }
 
             // 逐条消息：text → stdout；json → stderr（保持 stdout 纯 JSON 机器输出）
             for (const auto& step : result.steps) {

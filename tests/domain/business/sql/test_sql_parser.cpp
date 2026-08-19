@@ -57,6 +57,20 @@ TEST_CASE("sql_parser_statements") {
     TEST_PASS("parser statements");
 }
 
+TEST_CASE("sql_parser_lexer_error_propagates") {
+    // 未闭合字符串：lexer 置 error 并返回 end token——必须上浮为解析错误
+    // （否则 parse"成功"丢弃畸形尾部，破坏 run_sql 零执行保证）。
+    SqlParser p;
+    auto r = p.parse("SELECT id FROM enchantment; 'unterminated");
+    expect(r.empty() && !p.error.empty(), "unterminated string -> parse error, zero statements");
+    expect(p.error.find("lexer error") != std::string::npos, "error names the lexer failure");
+    // 非法字符同理。
+    SqlParser p2;
+    auto r2 = p2.parse("SELECT * FROM enchantment; @");
+    expect(r2.empty() && !p2.error.empty(), "unexpected char -> parse error, zero statements");
+    TEST_PASS("lexer error propagation");
+}
+
 TEST_CASE("sql_parser_errors") {
     SqlParser p;
     auto r = p.parse("FROB x;");
