@@ -66,6 +66,17 @@ std::string tag_values_str(const Profile& p, const EquipmentTag& t) {
     return "";
 }
 
+/// 文件名消毒：profile key 是任意字符串（可含 ':' 等 Windows 非法字符），
+/// 而 loader 按文件内顶层 `name` 字段取 key —— 文件名不必等于 key。
+/// 规则：`: \ / < > " | ? *` → `_`（Windows 非法文件名字符集）。
+std::string sanitize_filename(const std::string& name) {
+    std::string out = name;
+    for (char& c : out)
+        if (c == ':' || c == '\\' || c == '/' || c == '<' || c == '>' || c == '"' || c == '|' || c == '?' || c == '*')
+            c = '_';
+    return out;
+}
+
 } // namespace
 
 SqlSession::SqlSession(ProfileManager& mgr, std::string profiles_dir)
@@ -149,7 +160,7 @@ SqlResult SqlSession::save(bool all) {
             _dirty.erase(name);
             continue;
         }
-        const std::filesystem::path path = std::filesystem::path(_profiles_dir) / (name + ".json");
+        const std::filesystem::path path = std::filesystem::path(_profiles_dir) / (sanitize_filename(name) + ".json");
         if (!write_profile_file(path, *p)) {
             r.message = "save failed: " + path.string(); // 保持脏
             return r;

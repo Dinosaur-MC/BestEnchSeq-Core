@@ -281,3 +281,42 @@ TEST_CASE("sql_session_save_current_vs_all_and_warning") {
     tp.cleanup();
     TEST_PASS("save current vs all and warning");
 }
+
+// ─── SAVE 文件名消毒：含 ':' 的 key → 消毒路径写盘，name 字段保留真实 key ──
+
+TEST_CASE("sql_session_save_windows_filename_sanitize") {
+    auto tp = make_temp_profiles({"p1"});
+    // ':' 是 Windows 非法文件名字符（profile key 任意字符串）——造一个有数据的
+    // ':'-key profile（Profile API 给 tag，使 SQL INSERT 的 FK 引用可解析）。
+    auto& p = tp.mgr.create("a:b");
+    p.add_tag({NSID("#minecraft:swords"), "swords"});
+
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("a:b");
+    auto r = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                    "VALUES ('test:coloned','Coloned',1,1,'#minecraft:swords');");
+    expect(r.affected == 1, "write on coloned key ok");
+    auto sv = s.save(false);
+    expect_eq(sv.message, "saved: a:b", "save message uses the real key");
+    expect(s.dirty_profiles().empty(), "clean after save");
+
+    // 消毒文件名 a_b.json 存在；原始 a:b.json 不得被创建
+    const std::filesystem::path sanitized = std::filesystem::path(tp.dir) / "a_b.json";
+    const std::filesystem::path raw = std::filesystem::path(tp.dir) / "a:b.json";
+    expect(std::filesystem::exists(sanitized), "sanitized file exists");
+    expect(!std::filesystem::exists(raw), "raw coloned filename not created");
+
+    // 文件内顶层 name = 真实 key → load_directory 按 key 回读（与文件名无关）
+    Json root = Json::parse(read_file_str(sanitized));
+    expect_eq(root["name"].as<std::string>(), "a:b", "file name field keeps the real key");
+
+    ProfileManager mgr2;
+    mgr2.load_directory(tp.dir);
+    const Profile* q = mgr2.find("a:b");
+    expect(q != nullptr, "reloaded by key from the name field");
+    if (q)
+        expect(q->ench().contains(NSID("test:coloned")), "coloned-key profile content round-trips");
+
+    tp.cleanup();
+    TEST_PASS("save windows filename sanitize");
+}
