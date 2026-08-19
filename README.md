@@ -16,11 +16,11 @@ BestEnchSeq-Core 是 **BestEnchSeq 最佳附魔顺序计算器的 Core 版本**�
 
 - **最优锻造序列**：搜索成本最优的附魔书锻造顺序（精确 + 近似算法可选）
 - **数据驱动**：vanilla JSON / CSV / MC 官方 datapack（`pack.mcmeta`）/ 自定义 mod 数据表
-- **Profile 一等公民**：依赖图（拓扑解析 + 环检测）、有效视图合并、事务式变更（undo）、版本化发布（`--publish`）
+- **Profile 一等公民**：依赖图（拓扑解析 + 环检测）、有效视图合并、事务式变更（undo）、版本化发布（`profile publish`）
 - **可插拔算法**：内建 `dp_merge` / `bb_dp` / `hamming`；插件热加载 `astar` / `dfs` / `idastar` / `diff_first` / `penalty_balance`
 - **沙箱隔离**（`BESQ_SANDBOX=1`）：第三方插件在 `besq-worker` 子进程中运行，父进程绝不 `dlopen`；ELF/PE 静态审计（W^X、危险符号）
 - **异步执行**：暂停/恢复/取消 + 流式进度 + 二进制 checkpoint（断点续跑）
-- **三种交互面**：CLI（`besq`）、C ABI（`include/besq/besq.h`）、HTTP API 服务（`besq --api serve`，REST + SSE；前端为独立项目）
+- **三种交互面**：CLI（`besq`）、C ABI（`include/besq/besq.h`）、HTTP API 服务（`besq serve`，REST + SSE；前端为独立项目）
 - **i18n**：内置 en_US / zh_CN，`--lang` > `BESQ_LANG` > 系统 locale 三级选择
 - **C++ 核心零第三方依赖**：自研 HTTP 服务器、JSON DOM、日志、i18n、并发队列
 
@@ -61,14 +61,14 @@ cmake -S plugins -B build/plugins -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/plugins
 
 # 加载插件并列出全部可用算法
-./build/bin/besq --algo-dir build/plugins --list-algorithms
+BESQ_ALGO_DIR=build/plugins ./build/bin/besq algo list
 
 # 使用插件算法（astar / dfs / idastar / diff_first / penalty_balance）
-./build/bin/besq --algo-dir build/plugins --algorithm astar \
+BESQ_ALGO_DIR=build/plugins ./build/bin/besq --algorithm astar \
   --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]" --source "sharpness=3"
 
 # 沙箱模式：插件在 besq-worker 子进程中隔离执行
-BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
+BESQ_SANDBOX=1 BESQ_ALGO_DIR=build/plugins ./build/bin/besq --algorithm astar \
   --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 ```
 
@@ -77,16 +77,15 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 ```bash
 # 指定 profile（自动解析依赖；根 key 固定 builtin:vanilla）
 ./build/bin/besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
-./build/bin/besq --profile-dir data/tests/profiles --profile modded_sword \
+BESQ_PROFILES_DIR=data/tests/profiles ./build/bin/besq --profile modded_sword \
   --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 
 # 发布 profile：拍平有效视图为自包含 JSON
-./build/bin/besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --output vanilla.json
+./build/bin/besq profile publish builtin:vanilla --version 1.0 --tag stable
 
-# 管理 profile 数据（导入 / 编辑 / 导出）
-./build/bin/besq --import mods/myenchant.json
-./build/bin/besq --edit "ench:mod,sharpness,max_level=10"
-./build/bin/besq --export out.json
+# 管理 profile 数据（导入 / 导出）
+./build/bin/besq profile import mods/myenchant.json
+./build/bin/besq profile export --file out.json
 ```
 
 ### 断点续跑（checkpoint）
@@ -101,20 +100,20 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 # HTTP 恢复端点：POST /api/checkpoints/restore {"path": "<ckpt>"}；GET /api/checkpoints 列出
 ```
 
-> 运行时默认路径（profiles/、logs/、states/、config.json）全部基于**可执行文件所在目录**（`common/utils/ExeDir.hpp`），与启动 CWD 无关；`--profile-dir` / `BESQ_*` 显式指定照常覆盖。
+> 运行时默认路径（profiles/、logs/、states/、config.json）全部基于**可执行文件所在目录**（`common/utils/ExeDir.hpp`），与启动 CWD 无关；`profile set_dir` / `BESQ_*` 显式指定照常覆盖。
 
 完整的 CLI 选项见 `besq --help`（按分组渲染）。
 
-## HTTP API 服务（`besq --api serve`）
+## HTTP API 服务（`besq serve`）
 
 前端已迁出独立项目；本仓库保留 HTTP 服务，由同一 `besq` 可执行文件启动，与 CLI 共享同一核心（REST API + SSE 事件流）。
 
 ```bash
 # 运行（默认 127.0.0.1 + OS 自动分配端口）
-./build/bin/besq --api serve
+./build/bin/besq serve
 
 # 指定端口 / 线程数 / /public 磁盘根
-./build/bin/besq --api serve --port 8765 --workers 4 --res-dir ./public
+./build/bin/besq serve --port 8765 --workers 4 --res-dir ./public
 # 等价环境变量：BESQ_HTTP_PORT / BESQ_HTTP_WORKERS / BESQ_HTTP_RES_DIR
 ```
 
@@ -148,7 +147,7 @@ SSE 事件流：`GET /api/tasks/{id}/events`（`progress` / `diag` / `completed`
 
 ## 架构
 
-四域单向分层 + 共享工具层，两个构建产物（`besq` / `besq-worker`）共享同一核心（HTTP 服务由 `besq --api serve` 提供）：
+四域单向分层 + 共享工具层，两个构建产物（`besq` / `besq-worker`）共享同一核心（HTTP 服务由 `besq serve` 提供）：
 
 ![BestEnchSeq-Core 架构](docs/diagrams/architecture-zh.svg)
 

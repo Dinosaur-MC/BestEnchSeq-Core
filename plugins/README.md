@@ -67,22 +67,23 @@ rm -rf build/plugins && cmake -S plugins -B build/plugins -DCMAKE_BUILD_TYPE=<�
 
 ## 运行时加载
 
-使用 `--algo-dir` 参数或 `BESQ_ALGO_DIR` 环境变量指定插件目录：
+使用 `BESQ_ALGO_DIR` 环境变量（或 `besq algo set_dir <dir>` 持久化）指定插件目录：
 
 ```bash
-# CLI 参数
-./build/bin/besq --algo-dir build/plugins --algorithm astar \
-  --target diamond_sword --source "sharpness=5"
-
 # 环境变量
 export BESQ_ALGO_DIR=build/plugins
+./build/bin/besq --algorithm astar \
+  --target diamond_sword --source "sharpness=5"
+
+# 持久化（写入 config.json）
+./build/bin/besq algo set_dir build/plugins
 ./build/bin/besq --algorithm idastar --target ...
 ```
 
 列出所有可用策略（含内置 + 插件）：
 
 ```bash
-./build/bin/besq --algo-dir build/plugins --list-algorithms
+BESQ_ALGO_DIR=build/plugins ./build/bin/besq algo list
 ```
 
 ## 插件 C ABI
@@ -125,7 +126,7 @@ BESQ_PLUGIN_ENTRY(NameAlgorithm)
 - [ ] `#include` 路径以 `plugins/` 为根，如 `#include "name/NameAlgorithm.h"`
 - [ ] 链接 `besq-core`（已有 CMakeLists.txt 自动处理）
 - [ ] 构建并测试：`cmake --build build/plugins`
-- [ ] 将插件目录添加到 `build/plugins`，通过 `--algo-dir` 加载验证
+- [ ] 将插件目录添加到 `build/plugins`，通过 `BESQ_ALGO_DIR` 加载验证
 
 ### 注意事项
 

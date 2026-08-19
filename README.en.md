@@ -16,11 +16,11 @@ The project is **data-driven**: built-in vanilla data tables, plus custom JSON/C
 
 - **Optimal forging sequences**: cost-optimal book order (exact + approximate strategies)
 - **Data-driven**: vanilla JSON / CSV / official datapack (`pack.mcmeta`) / custom mod sheets
-- **Profile as a first-class citizen**: dependency graph (topological resolution + cycle detection), effective-view merging, transactional mutation (undo), versioned publish (`--publish`)
+- **Profile as a first-class citizen**: dependency graph (topological resolution + cycle detection), effective-view merging, transactional mutation (undo), versioned publish (`profile publish`)
 - **Pluggable algorithms**: built-in `dp_merge` / `bb_dp` / `hamming`; hot-loaded plugins `astar` / `dfs` / `idastar` / `diff_first` / `penalty_balance`
 - **Sandbox isolation** (`BESQ_SANDBOX=1`): third-party plugins run inside a `besq-worker` subprocess; the parent never `dlopen`s; static ELF/PE audit (W^X, dangerous symbols)
 - **Asynchronous execution**: pause/resume/cancel + streaming progress + binary checkpoints (resume from pause)
-- **Three interfaces**: CLI (`besq`), C ABI (`include/besq/besq.h`), and an HTTP API service (`besq --api serve`, REST + SSE; the frontend is a separate project)
+- **Three interfaces**: CLI (`besq`), C ABI (`include/besq/besq.h`), and an HTTP API service (`besq serve`, REST + SSE; the frontend is a separate project)
 - **i18n**: built-in en_US / zh_CN; `--lang` > `BESQ_LANG` > system locale
 - **Zero third-party dependencies in the C++ core**: self-built HTTP server, JSON DOM, logger, i18n, concurrent queues
 
@@ -61,14 +61,14 @@ cmake -S plugins -B build/plugins -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/plugins
 
 # Load plugins and list all available algorithms
-./build/bin/besq --algo-dir build/plugins --list-algorithms
+BESQ_ALGO_DIR=build/plugins ./build/bin/besq algo list
 
 # Use a plugin algorithm (astar / dfs / idastar / diff_first / penalty_balance)
-./build/bin/besq --algo-dir build/plugins --algorithm astar \
+BESQ_ALGO_DIR=build/plugins ./build/bin/besq --algorithm astar \
   --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]" --source "sharpness=3"
 
 # Sandbox mode: plugins run isolated inside a besq-worker subprocess
-BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
+BESQ_SANDBOX=1 BESQ_ALGO_DIR=build/plugins ./build/bin/besq --algorithm astar \
   --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 ```
 
@@ -77,30 +77,29 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 ```bash
 # Select a profile (dependencies resolve automatically; the root key is builtin:vanilla)
 ./build/bin/besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
-./build/bin/besq --profile-dir data/tests/profiles --profile modded_sword \
+BESQ_PROFILES_DIR=data/tests/profiles ./build/bin/besq --profile modded_sword \
   --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 
 # Publish a profile: flatten the effective view into a self-contained JSON
-./build/bin/besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --output vanilla.json
+./build/bin/besq profile publish builtin:vanilla --version 1.0 --tag stable
 
-# Manage profile data (import / edit / export)
-./build/bin/besq --import mods/myenchant.json
-./build/bin/besq --edit "ench:mod,sharpness,max_level=10"
-./build/bin/besq --export out.json
+# Manage profile data (import / export)
+./build/bin/besq profile import mods/myenchant.json
+./build/bin/besq profile export --file out.json
 ```
 
 Run `besq --help` for the complete, grouped CLI reference.
 
-## HTTP API Service (`besq --api serve`)
+## HTTP API Service (`besq serve`)
 
 The frontend moved to a separate project; this repository keeps the HTTP service, launched from the same `besq` executable over the same core (REST API + SSE event streams).
 
 ```bash
 # Run (default 127.0.0.1 + OS-assigned port)
-./build/bin/besq --api serve
+./build/bin/besq serve
 
 # Port / workers / /public disk root
-./build/bin/besq --api serve --port 8765 --workers 4 --res-dir ./public
+./build/bin/besq serve --port 8765 --workers 4 --res-dir ./public
 # Equivalent env vars: BESQ_HTTP_PORT / BESQ_HTTP_WORKERS / BESQ_HTTP_RES_DIR
 ```
 
@@ -134,7 +133,7 @@ New algorithms only need to implement `IAlgorithm::execute()` to gain thread man
 
 ## Architecture
 
-Four-domain one-way layering on top of shared utilities. Two artifacts (`besq` / `besq-worker`) share the same core (the HTTP service runs as `besq --api serve`):
+Four-domain one-way layering on top of shared utilities. Two artifacts (`besq` / `besq-worker`) share the same core (the HTTP service runs as `besq serve`):
 
 ![BestEnchSeq-Core architecture](docs/diagrams/architecture-en.svg)
 

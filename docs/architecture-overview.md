@@ -9,11 +9,11 @@
 
 C++20 实现的 Minecraft 附魔锻造序列规划器：给定**目标**（`--target`，期望最终附魔）与**起点**（`--source` 源附魔或库存物品），搜索成本最优的附魔书锻造顺序，并输出逐步锻造方案。约束包括铁砧惩罚（prior work penalty）、魔咒冲突、装备适用性（tag）、平台差异（Java/Bedrock）、Too Expensive 上限（39 级）等。
 
-两个构建产物共享同一核心（HTTP 服务由 `besq --api serve` 提供；前端已迁出独立项目）：
+两个构建产物共享同一核心（HTTP 服务由 `besq serve` 提供；前端已迁出独立项目）：
 
 | 产物 | 门控 | 用途 |
 |---|---|---|
-| `besq` | 默认 | 命令行工具（CLI + C ABI + `--api serve` HTTP 服务） |
+| `besq` | 默认 | 命令行工具（CLI + C ABI + `besq serve` HTTP 服务） |
 | `besq-worker` | `BESQ_BUILD_SANDBOX=ON` | 沙箱子进程，承载第三方插件算法的隔离执行 |
 
 核心卖点：**数据驱动**（vanilla/mod 数据表、MC 官方 datapack、Profile 依赖体系）、**算法可插拔**（内建 + 插件热加载 + 审计/沙箱）、**零第三方依赖**（纯标准库 + 自研 HTTP/JSON/i18n/并发组件）。
@@ -40,7 +40,7 @@ cmake --build build --target forge_benchmark
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 宿主（hosts）: besq (CLI · HTTP 服务 --api serve) · besq-worker (沙箱) │
+│ 宿主（hosts）: besq (CLI · HTTP 服务 serve) · besq-worker (沙箱) │
 └───────────────┬─────────────────────────────────────────────────────┘
                 ▼
   ┌───────────────────────────────────────────────┐
@@ -90,7 +90,7 @@ cmake --build build --target forge_benchmark
 
 ```
 src/
-├── main.cpp                  # 入口（apply_lang → 目标分发：CLIApp::run / --api serve HTTP 服务）
+├── main.cpp                  # 入口（apply_lang → 目标分发：CLIApp::run / serve HTTP 服务）
 ├── AppConfig.h               # 运行时配置（env 读取：BESQ_LANG/SANDBOX/HTTP_*…）
 ├── BuildConfig.h.in          # 生成头（BESQ_VERSION 等）
 ├── builtin/                  # 嵌入资源收集层（EmbeddedData 壳头 + 生成物锚点；枚举/接口/实现由 CMake besq_embed_resources 全自动生成，零项目内依赖）
@@ -215,8 +215,8 @@ class IForgeEngine {
 |---|---|---|
 | CLI | `besq` | 28 选项（v2 模板解析器 `CLIParser`，编译期 OptionTable 校验、`duplicate_option` 诊断、help 分组、i18n 错误） |
 | C ABI | `include/besq/besq.h` | 29 个 `besq_*` 函数；错误 = last_error + -1/nullptr；JSON 交换 |
-| HTTP | `besq --api serve` | 8 控制器 27+ 路由（见下表）；错误信封 `{ok, error}` |
-| SSE | `besq --api serve` | `event: progress/diag/completed/failed + data: JSON`；15s 心跳；logs 流为纯 data 帧 |
+| HTTP | `besq serve` | 8 控制器 27+ 路由（见下表）；错误信封 `{ok, error}` |
+| SSE | `besq serve` | `event: progress/diag/completed/failed + data: JSON`；15s 心跳；logs 流为纯 data 帧 |
 | 插件 | `plugins/` | 单 C 符号 `besq_create_algorithm`；共享 vtable/heap 故无需 destroy；加载前静态审计（W^X/危险导入） |
 
 **Web 端点速查**：
@@ -240,7 +240,7 @@ class IForgeEngine {
 
 ```
 main.cpp → apply_lang(在 parse 之前，保证错误消息语言正确) → CLIApp::run
-  → parse（v2 CLIParser）→ --algo-dir 插件加载 → load_profiles + activate
+  → parse（v2 CLIParser）→ 插件加载（BESQ_ALGO_DIR）→ load_profiles + activate
   → build_solve_request（inventory 两阶段解析 / direct 默认 dp_merge）
   → BesqContext::solve → SolvePipeline::run
       stage_apply:    CompactAdapter::apply(Profile + TagResolver → AlgorithmInput)
@@ -311,7 +311,7 @@ vanilla.json / CSV / datapack(pack.mcmeta) → FormatDetector → 三解析器 �
 | 新增一种数据格式 | 业务域实现解析器（产出 `EnchantmentData/EquipmentData` DTO）+ 在 `FormatDetector` 注册 |
 | 新增一个 HTTP 端点 | 在 `src/domain/interface/web/controllers/` 仿照现有控制器写 `BESQ_ROUTE`，注册到 `WebModule::Impl` 构造 |
 | 调试算法问题 | `besq --verbose` + `--format json` 看诊断；`logs/diag/*.log` 落盘 KV；`BESQ_DEEP_DIAGNOSTICS=ON` 构建开计数器；`pause → serialize_state → start(checkpoint)` 断点续跑 |
-| 跑插件 | 先 `cmake --build build`，再 `cmake -S plugins -B build/plugins -DCMAKE_PREFIX_PATH=$PWD/build && cmake --build build/plugins`，然后 `--algo-dir build/plugins`；`BESQ_SANDBOX=1` 走沙箱 |
+| 跑插件 | 先 `cmake --build build`，再 `cmake -S plugins -B build/plugins -DCMAKE_PREFIX_PATH=$PWD/build && cmake --build build/plugins`，然后 `BESQ_ALGO_DIR=build/plugins`（或 `algo set_dir`）；`BESQ_SANDBOX=1` 走沙箱 |
 | 改锻造成本模型 | 继承 `IForgeEngine` 只覆写所需子操作（`ForgeEngine` 尊重 `ForgeConfig` 标志：平台/忽略惩罚/忽略修复/忽略不兼容） |
 
 ---

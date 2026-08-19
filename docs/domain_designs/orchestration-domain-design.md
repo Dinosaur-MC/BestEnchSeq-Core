@@ -627,7 +627,7 @@ External request (CLI / API)
 ### Export Flow
 
 ```
-External request (CLI --export / API)
+External request (CLI profile export / API)
   → Assemble ExportRequest { target, format, path, solutions }
   → ExportPipeline::run(profile, request)
        → dispatch switch
