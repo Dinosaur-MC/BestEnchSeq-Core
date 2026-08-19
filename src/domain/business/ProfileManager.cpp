@@ -548,9 +548,14 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
             // same file now loads under the same key via load_directory / load.
             Profile loaded = loader.load(path);
             const std::string name = loaded.name();
+            // replace-on-conflict：remove() 会清空/改指活动选中（L98-113），
+            // 重新 add 后须恢复，否则同名替换活动 profile 时选中丢失。
+            const bool was_active = (_active == name);
             if (exists(name))
                 remove(name);  // replace-on-conflict
             _profiles[name] = std::make_unique<Profile>(std::move(loaded));
+            if (was_active)
+                _active = name;
         } else if (entry.is_directory() &&
                    std::filesystem::exists(path / "pack.mcmeta")) {
             // A datapack subdirectory — load it as a profile.
@@ -646,9 +651,13 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         if (!exists("builtin:vanilla"))
             create("builtin:vanilla");
 
+        // replace-on-conflict：remove() 会清空/改指活动选中，重新 add 后恢复
+        const bool was_active = (_active == name);
         if (exists(name))
             remove(name);  // replace-on-conflict
         _profiles[name] = std::make_unique<Profile>(std::move(profile));
+        if (was_active)
+            _active = name;
 
         _build_graph();
         cross_validate(name);  // clears _effective_cache

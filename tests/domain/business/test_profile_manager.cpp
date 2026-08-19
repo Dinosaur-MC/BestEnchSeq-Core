@@ -393,6 +393,65 @@ TEST_CASE("test_pm_load_directory") {
     TEST_PASS("test_pm_load_directory");
 }
 
+// ─── Test: replace-on-conflict preserves the active selection ───────────
+// load_directory 对同名文件做 remove+re-add（replace-on-conflict）；remove()
+// 会清空/改指活动选中，重新 add 后必须恢复，否则替换活动 profile 时选中
+// 丢失（SQL SAVE→reload 跨进程回读门暴露，Task 6 Bug 1）。
+
+TEST_CASE("test_pm_load_directory_replace_keeps_active") {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() / ("besq_pm_replace_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+    auto path = dir / "bare_mod.json";
+    auto write_mod = [&](const char* name) {
+        std::ofstream f(path);
+        f << R"({
+            "name": "bare_mod",
+            "dependencies": ["builtin:vanilla"],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+        (void)name;
+    };
+
+    ProfileManager pm;
+    write_mod("first");
+    pm.load_directory(dir);
+    expect(pm.exists("bare_mod"), "bare_mod loaded");
+    pm.activate("builtin:vanilla");  // CLI 流：load_builtin() 先激活根 profile
+    expect(pm.active_name() == "builtin:vanilla", "builtin:vanilla active before replace");
+
+    // 替换活动 profile（builtin:vanilla 自身被同名文件替换）→ 选中保持
+    auto vp = dir / "builtin_vanilla.json";
+    {
+        std::ofstream f(vp);
+        f << R"({
+            "name": "builtin:vanilla",
+            "dependencies": [],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+    pm.load_directory(dir);
+    expect(pm.exists("builtin:vanilla"), "builtin:vanilla re-added after replace");
+    expect(pm.active_name() == "builtin:vanilla", "active selection preserved after replacing active profile");
+
+    // 非活动 profile 被替换 → 活动选中不受影响
+    pm.activate("bare_mod");
+    write_mod("second");
+    pm.load_directory(dir);
+    expect(pm.active_name() == "bare_mod", "active selection preserved after replacing non-active profile");
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(vp);
+    std::filesystem::remove(dir);
+    TEST_PASS("test_pm_load_directory_replace_keeps_active");
+}
+
 // ─── Test: Effective View (topological merge + TagResolver + cache) ────
 
 TEST_CASE("test_pm_effective_view") {
