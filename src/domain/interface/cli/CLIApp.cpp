@@ -744,7 +744,9 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
                 throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.source));
             request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
             request.payload = InventoryPayload{std::move(items), {}};
-            request.algorithm = config.algorithm;
+            // 物品列表 inventory：显式 --algorithm 优先，否则默认 hamming
+            //（与 --input JSON 路径一致；dp_merge 为 direct-only）
+            request.algorithm = config.algorithm_explicit ? config.algorithm : "hamming";
         }
         // 防御性不变式（invalid_mode 路径保留；切片 1 恒不触发）
         if (request.mode != AlgorithmMode::direct && request.mode != AlgorithmMode::inventory)

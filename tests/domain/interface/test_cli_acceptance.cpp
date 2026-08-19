@@ -968,6 +968,15 @@ TEST_CASE("cli_slice1_mode_inference") {
         expect(req.mode == AlgorithmMode::inventory, "item[ench] -> inventory");
     }
     {
+        // 单物品：也推断 inventory，且默认算法 hamming（与 --input JSON 路径一致）
+        CLIApp::Config cfg;
+        cfg.target = "diamond_sword[sharpness=5]";
+        cfg.source = "diamond_sword";
+        auto req = CLIApp::build_solve_request(cfg, ctx);
+        expect(req.mode == AlgorithmMode::inventory, "single item -> inventory");
+        expect(req.algorithm == "hamming", "item-list inventory defaults to hamming");
+    }
+    {
         // --input 自包含 + --source 拒绝
         CLIApp::Config cfg;
         cfg.input = "-";
