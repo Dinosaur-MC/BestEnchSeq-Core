@@ -328,6 +328,22 @@ struct ParseResult {
         return r;
     }
 
+    /// 递归：本层或任一嵌套命令层的 help_requested 为真
+    bool help_requested_anywhere() const noexcept {
+        if (help_requested) return true;
+        bool r = false;
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&] {
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                if constexpr (is_command<ET>::value) {
+                    const auto& v = std::get<Is>(value);
+                    if (v.has_value() && v->help_requested_anywhere()) r = true;
+                }
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        return r;
+    }
+
     /// 递归展平本层 + 所有嵌套命令层的格式化消息
     std::vector<std::string> all_messages() const {
         std::vector<std::string> out = messages;

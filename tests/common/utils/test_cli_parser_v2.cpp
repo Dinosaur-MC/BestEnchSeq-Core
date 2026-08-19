@@ -729,3 +729,19 @@ TEST_CASE("test_option_alt_long") {
     }
     TEST_PASS("option alt_long");
 }
+
+TEST_CASE("test_subcmd_help_anywhere") {
+    ParseResult<Flag, Command<Flag>> top;
+    expect(!top.help_requested_anywhere(), "empty result: no help");
+    top.help_requested = true;
+    expect(top.help_requested_anywhere(), "own help flag counts");
+    top.help_requested = false;
+    ParseResult<Flag> leaf;
+    leaf.help_requested = true;
+    std::get<1>(top.value) = std::move(leaf);
+    expect(top.help_requested_anywhere(), "nested command help counts");
+    ParseResult<Flag> leaf2;
+    std::get<1>(top.value) = std::move(leaf2);
+    expect(!top.help_requested_anywhere(), "no help anywhere -> false");
+    TEST_PASS("help_requested_anywhere");
+}
