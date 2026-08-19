@@ -20,8 +20,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -1143,6 +1145,43 @@ TEST_CASE("cli_slice2a_inspect_behavior") {
     TEST_PASS("slice2a inspect behavior");
 }
 
+// review C1：--fields 非前缀子集两行以上列不串位（原实现逐行收缩 headers/numeric，
+// 第 2 行起子集位置索引全列 → 错位；json 模式对名字列 stoll → 崩溃）。
+// review I1：json 的 is_treasure 必须是 bool（无引号），max_level 数值列不带引号。
+TEST_CASE("cli_slice2a_inspect_fields_alignment") {
+    {   // text 形态：--fields id,max_level 两行以上，列内容不串位（exit-0 门控崩溃）
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench",
+                              "--fields", "id,max_level", "--limit", "5"};
+        int rc = CLIApp().run(9, const_cast<char**>(argv));
+        expect(rc == 0, "fields text exit 0");
+    }
+    {   // json 形态：不再崩溃且列值正确（取全部行，断言 rows 数组存在）
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench",
+                              "--fields", "id,max_level", "--format", "json"};
+        int rc = CLIApp().run(9, const_cast<char**>(argv));
+        expect(rc == 0, "fields json exit 0 (no stoll crash)");
+    }
+    {   // I1：验收框架不提供 stdout 捕获（系统级锁定），此处进程内 rdbuf 交换
+        // （subprocess-free）临时接管 std::cout，断言 JSON 原文的 bool/数值形态。
+        std::ostringstream buf;
+        std::streambuf* old = std::cout.rdbuf(buf.rdbuf());
+        struct Restore {
+            std::streambuf* old;
+            ~Restore() { std::cout.rdbuf(old); }
+        } restore{old};
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench",
+                              "--format", "json"};
+        int rc = CLIApp().run(7, const_cast<char**>(argv));
+        expect(rc == 0, "inspect json full exit 0");
+        const std::string out = buf.str();
+        expect(out.find("\"is_treasure\":true") != std::string::npos, "is_treasure:true bool form");
+        expect(out.find("\"is_treasure\":false") != std::string::npos, "is_treasure:false bool form");
+        expect(out.find("\"is_treasure\":\"") == std::string::npos, "is_treasure never string-quoted");
+        expect(out.find("\"max_level\":5") != std::string::npos, "max_level numeric without quotes");
+    }
+    TEST_PASS("inspect fields alignment");
+}
+
 TEST_CASE("cli_slice2a_algo_inspect") {
     {
         const char* argv[] = {"besq", "algo", "inspect", "dp_merge"};
@@ -1186,6 +1225,12 @@ TEST_CASE("cli_slice2a_datapack_roundtrip") {
         fs::path p;
         ~Guard() { std::error_code ec; fs::remove_all(p, ec); }
     } guard{tmp};
+    // 导出前取源 profile own-data 装备 id（review I2：装备保真 = 源装备 id 子集保留）
+    BesqContext ctx1;
+    ctx1.load_builtin();
+    std::unordered_set<std::string> src_eq_ids;
+    for (const auto& e : ctx1.profile("builtin:vanilla").eq())
+        src_eq_ids.insert(e.id.str());
     {
         const std::string tmp_str = tmp.string();  // 物化：避免 argv 持悬垂 c_str()
         const char* argv[] = {"besq", "profile", "export", "--format", "datapack",
@@ -1219,6 +1264,14 @@ TEST_CASE("cli_slice2a_datapack_roundtrip") {
             }
         }
         expect(sharp_ok, "sharpness present with max_level=5");
+        // I2：装备保真——源装备 id 全集 ⊆ 回读 datapack 装备集（子集检查，
+        // 非精确计数：引用标签（enchantable/*）解析值可能并入装备推导）。
+        std::unordered_set<std::string> dp_eq_ids;
+        for (const auto& e : p.eq()) dp_eq_ids.insert(e.id.str());
+        size_t eq_missing = 0;
+        for (const auto& id : src_eq_ids)
+            if (!dp_eq_ids.count(id)) ++eq_missing;
+        expect(eq_missing == 0, "all source equipment ids survive datapack roundtrip");
         break;
     }
     expect(found_dp, "datapack profile loaded (key = folder stem)");

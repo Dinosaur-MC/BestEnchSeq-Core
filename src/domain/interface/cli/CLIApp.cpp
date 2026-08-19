@@ -441,9 +441,15 @@ int CLIApp::run_profile(const Config& config) {
                 throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.profile_target));
             const Profile& p = _ctx.profile(config.profile_target);
             // ── 收集行（filter → fields → 分页；count = 过滤后分页前）──
+            // 列定义保持全列（headers/numeric/bool_cols 永不收缩为字段子集）；
+            // --fields 只在行循环前算一次全列下标子集 selected，逐行按全列下标取
+            // cell——修复 review C1：原按行重算子集并把 headers/numeric 收缩，
+            // 第 2 行起 i 用子集位置索引全列 → 错位，json 模式对名字 stoll 崩溃。
             std::vector<std::string> headers;
+            std::vector<bool> numeric;      // 全列：int 列标记（json 输出 stoll）
+            std::vector<bool> bool_cols;    // 全列：bool 列标记（json 输出 Json(bool)）
+            std::vector<size_t> selected;   // --fields 选中的全列下标（空 = 全列）
             std::vector<std::vector<std::string>> rows;
-            std::vector<bool> numeric;
             auto contains = [](const std::string& hay, const std::string& needle) {
                 if (needle.empty()) return true;
                 auto h = hay; auto n = needle;
@@ -451,58 +457,62 @@ int CLIApp::run_profile(const Config& config) {
                 for (auto& c : n) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                 return h.find(n) != std::string::npos;
             };
-            auto pick_fields = [&](const std::vector<std::string>& all,
-                                   const std::vector<std::string>& all_headers,
-                                   const std::vector<bool>& all_numeric) {
-                // fields 空 → 全列；否则按逗号选择（未知列报错）
-                std::vector<std::string> want;
-                if (config.inspect_fields.empty()) want = all_headers;
-                else for (const auto& f : string_utils::split(config.inspect_fields, ','))
-                    want.push_back(string_utils::trim(f));
-                for (const auto& w : want)
-                    if (std::find(all_headers.begin(), all_headers.end(), w) == all_headers.end())
-                        throw std::runtime_error(tr_fmt("cli.err.invalid_inspect_field", w,
-                            string_utils::join(all_headers, ", ")));
-                std::vector<std::string> hs, cells;
-                std::vector<bool> nums;
-                for (size_t i = 0; i < all_headers.size(); ++i)
-                    if (std::find(want.begin(), want.end(), all_headers[i]) != want.end()) {
-                        hs.push_back(all_headers[i]); cells.push_back(all[i]); nums.push_back(all_numeric[i]);
-                    }
-                return std::make_tuple(hs, cells, nums);
+            auto compute_selected = [&]() {
+                // fields 空 → 全列；否则按逗号选择（未知列报错）。仅行循环前调用一次。
+                if (config.inspect_fields.empty()) {
+                    for (size_t i = 0; i < headers.size(); ++i) selected.push_back(i);
+                    return;
+                }
+                for (const auto& f : string_utils::split(config.inspect_fields, ',')) {
+                    const std::string name = string_utils::trim(f);
+                    const auto it = std::find(headers.begin(), headers.end(), name);
+                    if (it == headers.end())
+                        throw std::runtime_error(tr_fmt("cli.err.invalid_inspect_field", name,
+                            string_utils::join(headers, ", ")));
+                    selected.push_back(static_cast<size_t>(it - headers.begin()));
+                }
+            };
+            auto pick = [&](const std::vector<std::string>& all) {
+                std::vector<std::string> cells;
+                cells.reserve(selected.size());
+                for (const size_t idx : selected) cells.push_back(all[idx]);
+                return cells;
             };
             auto str = [](const NSID& id) { return id.str(); };
             if (kind == "ench") {
                 headers = {"id", "name", "max_level", "limited_level", "multiplier", "is_treasure"};
                 numeric = {false, false, true, true, true, false};
+                bool_cols = {false, false, false, false, false, true};
+                compute_selected();
                 for (const auto& e : p.ench()) {
                     if (!contains(e.id.str(), config.inspect_filter)
                         && !contains(e.name, config.inspect_filter)) continue;
                     std::vector<std::string> all = {str(e.id), e.name,
                         std::to_string(e.max_level), std::to_string(e.limited_level),
                         std::to_string(e.multiplier), e.is_treasure ? "true" : "false"};
-                    auto [hs, cells, nums] = pick_fields(all, headers, numeric);
-                    rows.push_back(cells); headers = hs; numeric = nums;
+                    rows.push_back(pick(all));
                 }
             } else if (kind == "equip") {
                 headers = {"id", "name", "category", "max_durability"};
                 numeric = {false, false, false, true};
+                bool_cols = {false, false, false, false};
+                compute_selected();
                 for (const auto& e : p.eq()) {
                     if (!contains(e.id.str(), config.inspect_filter)
                         && !contains(e.name, config.inspect_filter)) continue;
                     std::vector<std::string> all = {str(e.id), e.name, str(e.category),
                         std::to_string(e.max_durability)};
-                    auto [hs, cells, nums] = pick_fields(all, headers, numeric);
-                    rows.push_back(cells); headers = hs; numeric = nums;
+                    rows.push_back(pick(all));
                 }
             } else {
                 headers = {"id", "name"};
                 numeric = {false, false};
+                bool_cols = {false, false};
+                compute_selected();
                 for (const auto& t : p.tags()) {
                     if (!contains(t.id.str(), config.inspect_filter)) continue;
                     std::vector<std::string> all = {str(t.id), t.name};
-                    auto [hs, cells, nums] = pick_fields(all, headers, numeric);
-                    rows.push_back(cells); headers = hs; numeric = nums;
+                    rows.push_back(pick(all));
                 }
             }
             const size_t total = rows.size();
@@ -521,15 +531,32 @@ int CLIApp::run_profile(const Config& config) {
                 Json arr = Json::array();
                 for (const auto& row : rows) {
                     Json r = Json::object();
-                    for (size_t c = 0; c < headers.size() && c < row.size(); ++c)
-                        r[headers[c]] = numeric[c] ? Json(static_cast<int64_t>(std::stoll(row[c]))) : Json(row[c]);
+                    // row 按 selected 排列；类型取全列标记（numeric → int、bool_cols → bool）
+                    for (size_t k = 0; k < selected.size() && k < row.size(); ++k) {
+                        const size_t idx = selected[k];
+                        if (numeric[idx])
+                            r[headers[idx]] = Json(static_cast<int64_t>(std::stoll(row[k])));
+                        else if (bool_cols[idx])
+                            r[headers[idx]] = Json(row[k] == "true");
+                        else
+                            r[headers[idx]] = Json(row[k]);
+                    }
                     arr.push_back(std::move(r));
                 }
                 o["rows"] = std::move(arr);
                 std::cout << o.to_string() << "\n";
             } else {
+                // text：按 selected 构建子集表头/数值标记（全列标记永不收缩）
+                std::vector<std::string> out_headers;
+                std::vector<bool> out_numeric;
+                out_headers.reserve(selected.size());
+                out_numeric.reserve(selected.size());
+                for (const size_t idx : selected) {
+                    out_headers.push_back(headers[idx]);
+                    out_numeric.push_back(numeric[idx]);
+                }
                 std::cout << tr_fmt("cli.msg.inspect_count", rows.size(), total) << "\n";
-                print_aligned_table(headers, rows, numeric);
+                print_aligned_table(out_headers, rows, out_numeric);
             }
             flush_output();
             return 0;
@@ -653,7 +680,7 @@ const auto ALGO_OPTS = OptionTable{
         .name = "inspect", .help_key = "cli.cmd.inspect_desc",
         .table = OptionTable{
             Positional<std::string>{.name = "algo", .help_key = "cli.help.algorithm_desc"},
-            Option<std::string>{.long_name = "format", .help_key = "cli.help.format_desc", .default_v = std::string("text")},
+            Option<std::string>{.long_name = "format", .help_key = "cli.help.inspect_format_desc", .default_v = std::string("text")},
         }},
 };
 
@@ -693,7 +720,7 @@ const auto PROFILE_OPTS = OptionTable{
             Option<std::string>{.long_name = "fields", .help_key = "cli.help.fields_desc"},
             Option<int>{.long_name = "limit", .help_key = "cli.help.limit_desc", .default_v = 0},
             Option<int>{.long_name = "page",  .help_key = "cli.help.page_desc",  .default_v = 1},
-            Option<std::string>{.long_name = "format", .help_key = "cli.help.format_desc", .default_v = std::string("text")},
+            Option<std::string>{.long_name = "format", .help_key = "cli.help.inspect_format_desc", .default_v = std::string("text")},
         }},
 };
 
