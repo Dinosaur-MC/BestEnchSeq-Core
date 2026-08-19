@@ -409,6 +409,8 @@ struct CLIApp::UserI18nTranslator {
         switch (diag.code) {
             case unknown_option:
                 return tr_fmt("cli.err.unknown_option", diag.arg);
+            case unknown_command:
+                return tr_fmt("cli.err.unknown_command", diag.arg);
             case missing_value:
                 return tr_fmt("cli.err.missing_value",
                               diag.option_name.value_or(std::string{}));
