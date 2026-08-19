@@ -90,9 +90,17 @@ void CLIApp::apply_lang(int argc, char* argv[]) {
     if (!lang_mgr.select(base_code))
         lang_mgr.select(lang_mgr.resolve_locale(base_code));
 
-    // 2. --lang CLI flag override.
+    // 2. --lang CLI flag override — 仅顶层：遇到命令名 token 即停止扫描
+    //    （下游 --lang 不再识别；值恰为命令名的选项值可能误停——罕见，回退
+    //    config.json / BESQ_LANG）。
+    static constexpr std::string_view kSubcommands[] = {
+        "solve", "calc", "profile", "algo", "algorithm", "serve",
+    };
     for (int i = 1; i < argc; ++i) {
         std::string_view a(argv[i]);
+        for (auto c : kSubcommands)
+            if (a == c)
+                return;   // 子命令已出现：其后的 --lang 不识别
         std::string override_code;
         if (a.starts_with("--lang="))
             override_code = std::string(a.substr(7));
@@ -675,50 +683,74 @@ void CLIApp::apply_algo_opts(const std::string& algo_opts, algorithm::SearchConf
 // are wired into algorithm::SearchConfig (max_search_time, memory_mb, ...).
 
 SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx) {
-    const bool inventory = config.input.has_value() || config.mode == "inventory";
+    // ── mode 判定：--input 自包含任务 → inventory；否则 --source 值类型推断：
+    //    整个值可解析为附魔列表 → direct；解析失败 → 按物品列表 → inventory。
+    bool inventory = config.input.has_value();
+    if (!inventory && !config.source.empty()) {
+        try {
+            EnchParser::parse(config.source, ctx.enchantments());
+        } catch (const std::exception&) {
+            inventory = true;
+        }
+    }
 
     SolveRequest request;
     request.mode = inventory ? AlgorithmMode::inventory : AlgorithmMode::direct;
 
     if (inventory) {
-        if (!config.input)
-            throw std::runtime_error(tr("cli.err.inventory_requires_input"));
-        if (!config.source.empty())
-            throw std::runtime_error(tr("cli.err.inventory_rejects_source"));
-
-        // ── 两阶段：先结构解析（读 profile），激活 profile 后再交叉验证 ──
-        std::string content = InventoryParser::read_content(*config.input);  // "-" → stdin
-        auto dto = InventoryParser::parse_task(content);                     // structural (schema errors throw)
-        // profile：CLI 显式 --profile 覆盖 JSON profile；否则 JSON 激活
-        // （profile_explicit 由 argv token 判定，见 parse()；profile 字段本身
-        //   携带 default_v="builtin:vanilla"，无法区分显式/缺省）
-        if (!config.profile_explicit && !dto.profile.empty()) {
-            auto members = split_profile_members(dto.profile);
-            for (const auto& m : members) {
-                auto profiles = ctx.list_profiles();
-                if (std::find(profiles.begin(), profiles.end(), m) == profiles.end())
-                    throw std::runtime_error(tr_fmt("cli.err.profile_not_found", m));
+        if (config.input) {
+            if (!config.source.empty())
+                throw std::runtime_error(tr("cli.err.inventory_rejects_source"));
+            // ── 两阶段：先结构解析（读 profile），激活 profile 后再交叉验证 ──
+            std::string content = InventoryParser::read_content(*config.input);  // "-" → stdin
+            auto dto = InventoryParser::parse_task(content);                     // structural (schema errors throw)
+            // profile：CLI 显式 --profile 覆盖 JSON profile；否则 JSON 激活
+            // （profile_explicit 由 argv token 判定，见 parse()；profile 字段本身
+            //   携带 default_v="builtin:vanilla"，无法区分显式/缺省）
+            if (!config.profile_explicit && !dto.profile.empty()) {
+                auto members = split_profile_members(dto.profile);
+                for (const auto& m : members) {
+                    auto profiles = ctx.list_profiles();
+                    if (std::find(profiles.begin(), profiles.end(), m) == profiles.end())
+                        throw std::runtime_error(tr_fmt("cli.err.profile_not_found", m));
+                }
+                if (members.size() > 1)
+                    ctx.activate_profile_group(std::move(members));
+                else if (members.size() == 1)
+                    ctx.activate_profile(members.front());
             }
-            if (members.size() > 1)
-                ctx.activate_profile_group(std::move(members));
-            else if (members.size() == 1)
-                ctx.activate_profile(members.front());
-        }
-        auto inv = InventoryParser::build_inventory(dto, ctx.enchantments(), ctx.equipment());
+            auto inv = InventoryParser::build_inventory(dto, ctx.enchantments(), ctx.equipment());
 
-        // target：CLI --target 覆盖 JSON target；两者皆缺 → 报错
-        if (!config.target.empty()) {
-            request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
+            // target：CLI --target 覆盖 JSON target；两者皆缺 → 报错
+            if (!config.target.empty()) {
+                request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
+            } else {
+                request.target_item = inv.target_item;
+                if (request.target_item.id.str().empty())
+                    throw std::runtime_error(tr("cli.err.inventory_requires_target"));
+            }
+            request.payload = InventoryPayload{std::move(inv.items), std::move(inv.priorities)};
+            // algorithm：CLI 显式 > JSON > 默认 hamming
+            request.algorithm = config.algorithm_explicit ? config.algorithm
+                : (!inv.algorithm.empty() ? inv.algorithm : "hamming");
         } else {
-            request.target_item = inv.target_item;
-            if (request.target_item.id.str().empty())
-                throw std::runtime_error(tr("cli.err.inventory_requires_target"));
+            // ── --source 物品列表（逗号分隔 item 或 item[ench]）→ inventory ──
+            std::vector<Item> items;
+            for (const auto& seg : string_utils::split(config.source, ',')) {
+                if (seg.empty()) continue;
+                items.push_back(ItemParser::parse(seg, ctx.enchantments(), ctx.equipment()));
+            }
+            if (items.empty())
+                throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.source));
+            request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
+            request.payload = InventoryPayload{std::move(items), {}};
+            request.algorithm = config.algorithm;
         }
-        request.payload = InventoryPayload{std::move(inv.items), std::move(inv.priorities)};
-        // algorithm：CLI 显式 > JSON > 默认 hamming
-        request.algorithm = config.algorithm_explicit ? config.algorithm
-            : (!inv.algorithm.empty() ? inv.algorithm : "hamming");
+        // 防御性不变式（invalid_mode 路径保留；切片 1 恒不触发）
+        if (request.mode != AlgorithmMode::direct && request.mode != AlgorithmMode::inventory)
+            throw std::runtime_error(tr_fmt("cli.err.invalid_mode", "?"));
     } else {
+        // ── direct 路径（原样保留）──
         request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
         request.payload = DirectPayload{};
         if (!config.source.empty())

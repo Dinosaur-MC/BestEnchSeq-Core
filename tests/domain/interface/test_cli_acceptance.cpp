@@ -940,3 +940,40 @@ TEST_CASE("cli_slice1_alt_long_and_shorts") {
     }
     TEST_PASS("slice1 alt_long and shorts");
 }
+
+TEST_CASE("cli_slice1_mode_inference") {
+    BesqContext ctx;
+    ctx.load_builtin();
+    {
+        CLIApp::Config cfg;
+        cfg.target = "diamond_sword[sharpness=5]";
+        cfg.source = "sharpness=2";
+        auto req = CLIApp::build_solve_request(cfg, ctx);
+        expect(req.mode == AlgorithmMode::direct, "enchant list -> direct");
+    }
+    {
+        CLIApp::Config cfg;
+        cfg.target = "diamond_sword[sharpness=5]";
+        cfg.source = "diamond_sword,iron_sword";
+        auto req = CLIApp::build_solve_request(cfg, ctx);
+        expect(req.mode == AlgorithmMode::inventory, "item list -> inventory");
+        expect(std::holds_alternative<InventoryPayload>(req.payload), "payload is inventory");
+    }
+    {
+        // 括号形式物品：item[ench] 也是 inventory
+        CLIApp::Config cfg;
+        cfg.target = "diamond_sword[sharpness=5]";
+        cfg.source = "diamond_sword[sharpness=3]";
+        auto req = CLIApp::build_solve_request(cfg, ctx);
+        expect(req.mode == AlgorithmMode::inventory, "item[ench] -> inventory");
+    }
+    {
+        // --input 自包含 + --source 拒绝
+        CLIApp::Config cfg;
+        cfg.input = "-";
+        cfg.source = "sharpness=2";
+        expect_throws([&] { CLIApp::build_solve_request(cfg, ctx); },
+                      "--input + --source rejected (inventory_rejects_source)");
+    }
+    TEST_PASS("mode inference");
+}
