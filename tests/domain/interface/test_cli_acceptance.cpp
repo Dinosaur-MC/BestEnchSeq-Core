@@ -15,6 +15,8 @@
 #include "domain/interface/cli/CLIApp.h"
 #include "framework/test_framework.h"
 
+#include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -1158,4 +1160,91 @@ TEST_CASE("cli_slice2a_algo_inspect") {
         expect_throws([&] { CLIApp().run(4, const_cast<char**>(argv)); }, "unknown algo throws");
     }
     TEST_PASS("algo inspect");
+}
+
+// ---------------------------------------------------------------------------
+// Task 5 (slice 2a): datapack export — round-trip readable + error paths
+// ---------------------------------------------------------------------------
+
+/// 跨平台唯一时间戳后缀（temp 目录唯一性）：Windows 用 GetTickCount64
+/// （framework 已含 windows.h），其他平台回退 steady_clock 毫秒。
+static std::string unique_ts_suffix() {
+#ifdef _WIN32
+    return std::to_string(static_cast<long long>(::GetTickCount64()));
+#else
+    return std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count());
+#endif
+}
+
+TEST_CASE("cli_slice2a_datapack_roundtrip") {
+    namespace fs = std::filesystem;
+    const fs::path tmp =
+        fs::temp_directory_path() / ("besq_dp_" + unique_ts_suffix());
+    struct Guard {
+        fs::path p;
+        ~Guard() { std::error_code ec; fs::remove_all(p, ec); }
+    } guard{tmp};
+    {
+        const std::string tmp_str = tmp.string();  // 物化：避免 argv 持悬垂 c_str()
+        const char* argv[] = {"besq", "profile", "export", "--format", "datapack",
+                              "--file", tmp_str.c_str(), "--profile", "builtin:vanilla"};
+        int rc = CLIApp().run(9, const_cast<char**>(argv));
+        expect(rc == 0, "datapack export exit 0");
+    }
+    expect(fs::exists(tmp / "pack.mcmeta"), "pack.mcmeta written");
+    expect(fs::exists(tmp / "data"), "data dir written");
+    // 回读：loader 命名 = 文件夹名 verbatim（besq_dp_*，非 vanilla_datapack ——
+    // 后者仅当 datapack 命名为 vanilla/builtin:vanilla 时触发）。
+    BesqContext ctx2;
+    ctx2.load_builtin();
+    ctx2.set_profiles_dir(tmp.parent_path().string());
+    ctx2.load_profiles();
+    auto profiles = ctx2.list_profiles();
+    bool found_dp = false;
+    for (const auto& name : profiles) {
+        if (name == "builtin:vanilla") continue;       // builtin 遮蔽，选 datapack 那个
+        if (name.rfind("besq_dp_", 0) != 0) continue;  // 只认本次导出的目录（防 temp 残留）
+        found_dp = true;
+        const Profile& p = ctx2.profile(name);
+        expect(p.ench().size() > 0, "datapack profile has enchantments");
+        // 最小保真门：sharpness 存在且 max_level=5（导出 ns = profile key 前缀
+        // "builtin"，故回读 id 为 builtin:sharpness —— 按尾部匹配）。
+        bool sharp_ok = false;
+        for (const auto& e : p.ench()) {
+            if (e.id.get_id() == "sharpness") {
+                sharp_ok = (e.max_level == 5);
+                break;
+            }
+        }
+        expect(sharp_ok, "sharpness present with max_level=5");
+        break;
+    }
+    expect(found_dp, "datapack profile loaded (key = folder stem)");
+    TEST_PASS("datapack roundtrip");
+}
+
+TEST_CASE("cli_slice2a_datapack_errors") {
+    namespace fs = std::filesystem;
+    const fs::path tmp =
+        fs::temp_directory_path() / ("besq_dp_err_" + unique_ts_suffix());
+    fs::create_directories(tmp / "existing");
+    struct Guard {
+        fs::path p;
+        ~Guard() { std::error_code ec; fs::remove_all(p, ec); }
+    } guard{tmp};
+    {   // 目标已存在且非空 → 拒绝
+        const std::string tmp_str = tmp.string();  // 物化：避免 argv 持悬垂 c_str()
+        const char* argv[] = {"besq", "profile", "export", "--format", "datapack",
+                              "--file", tmp_str.c_str()};
+        expect_throws([&] { CLIApp().run(7, const_cast<char**>(argv)); },
+                      "non-empty dir rejected");
+    }
+    {   // 缺 --file → export_dir_required
+        const char* argv[] = {"besq", "profile", "export", "--format", "datapack"};
+        expect_throws([&] { CLIApp().run(5, const_cast<char**>(argv)); },
+                      "missing --file rejected");
+    }
+    TEST_PASS("datapack errors");
 }

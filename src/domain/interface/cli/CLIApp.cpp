@@ -16,6 +16,7 @@
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/orchestration/components/DatapackExporter.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -342,6 +343,25 @@ int CLIApp::run_profile(const Config& config) {
             return 0;
         }
         case Config::ProfileAction::export_: {
+            if (config.export_format == "datapack") {
+                if (config.export_file.empty() || config.export_file == "-")
+                    throw std::runtime_error(tr("cli.err.export_dir_required"));
+                _ctx.load_profiles();
+                if (!config.export_profile.empty()) {
+                    if (!_ctx.profile_exists(config.export_profile))
+                        throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.export_profile));
+                    _ctx.activate_profile(config.export_profile);
+                }
+                // 导出 active profile 的 own data（激活后取）
+                const Profile& p = _ctx.profile(_ctx.active_profile());
+                std::string error;
+                if (!orchestration::DatapackExporter::export_profile(p, config.export_file, error))
+                    throw std::runtime_error(error.empty()
+                        ? tr_fmt("main.err.export_failed", config.export_file) : error);
+                LOG_INFO("%s", tr_fmt("main.msg.profile_exported", config.export_file).c_str());
+                flush_output();
+                return 0;
+            }
             if (config.export_format != "json" && config.export_format != "csv")
                 throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.export_format));
             _ctx.load_profiles();
