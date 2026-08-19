@@ -1326,8 +1326,9 @@ TEST_CASE("cli_slice2a_datapack_roundtrip") {
         // 精确计数 == 源计数 + 7 个 skull 系残存（player_head/skeleton_skull/…）：
         // 这些物品 load 端类别由后缀推导为 head/skull ≠ id 尾部，规则不命中——
         // 属 review 预期外的残存（详见 minors-fix-report item 13 的验证记录）。
+        // 文档化保真边界：源装备子集 + skull 系残存（非精确 85）。
         expect(dp_eq_ids.size() == src_eq_count + 7,
-               "loaded equipment count == source + 7 skull-category remnants");
+               "fidelity boundary: source subset preserved + 7 skull-category remnants (durability-0 suffix-category junk, see report item 13)");
         break;
     }
     expect(found_dp, "datapack profile loaded (key = folder stem)");

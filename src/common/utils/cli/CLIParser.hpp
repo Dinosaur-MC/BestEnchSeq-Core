@@ -416,11 +416,16 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
         r += '\n';
     }
     // ── 3. 无分组选项（原第 353–399 行搬移；仅替换标识符）──
+    //    Positional 与 Command 一样不在无分组区渲染：Positional 无 help_group →
+    //    eg.empty() 会命中此处，产生一行无列名的裸帮助文本，与新增的 Positional
+    //    段（用法行后）重复（slice-1 命令排除先例）。
     bool has_ungrouped = false;
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         (([&]{
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
             if constexpr (is_command<ET>::value) return;
+            if constexpr (requires { typename ET::value_type; })
+                if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) return;
             const auto& e = std::get<Is>(entries);
             std::string_view eg;
             if constexpr (requires { e.help_group; }) eg = e.help_group;
@@ -433,6 +438,8 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
             (([&]{
                 using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
                 if constexpr (is_command<ET>::value) return;
+                if constexpr (requires { typename ET::value_type; })
+                    if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) return;
                 const auto& e = std::get<Is>(entries);
                 std::string_view eg;
                 if constexpr (requires { e.help_group; }) eg = e.help_group;
