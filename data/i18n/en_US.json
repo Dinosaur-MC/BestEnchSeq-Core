@@ -112,6 +112,7 @@
     "cli.err.flag_no_value": "Option '--{0}' does not take a value",
     "cli.err.parse_failed": "Failed to parse command line arguments",
     "cli.err.unknown_command": "Unknown command: '{0}'",
+    "cli.err.invalid_source_forms": "Invalid --source: '{0}'. Expected an enchantment list (e.g. sharpness=5,knockback=2) or an item list (e.g. diamond_sword,iron_sword).",
     "cli.err.missing_target": "Missing --target (or use --input / --resume / a subcommand)",
     "cli.err.empty_dir": "Directory value must not be empty",
     "cli.help.dir_desc": "Directory path",

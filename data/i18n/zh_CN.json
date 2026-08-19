@@ -112,6 +112,7 @@
     "cli.err.flag_no_value": "选项 '--{0}' 不接受值",
     "cli.err.parse_failed": "命令行参数解析失败",
     "cli.err.unknown_command": "未知命令: '{0}'",
+    "cli.err.invalid_source_forms": "无效的 --source: '{0}'。期望附魔列表（如 sharpness=5,knockback=2）或物品列表（如 diamond_sword,iron_sword）。",
     "cli.err.missing_target": "缺少 --target（或使用 --input / --resume / 子命令）",
     "cli.err.empty_dir": "目录值不能为空",
     "cli.help.dir_desc": "目录路径",

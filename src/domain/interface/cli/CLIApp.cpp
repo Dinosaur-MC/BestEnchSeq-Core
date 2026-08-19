@@ -372,7 +372,8 @@ int CLIApp::run_profile(const Config& config) {
             return 0;
         }
         default:
-            return 0;
+            // 无动作（如 `besq profile` 裸命令）不再静默成功——按解析失败处理
+            throw std::runtime_error(tr("cli.err.parse_failed"));
     }
 }
 
@@ -399,7 +400,8 @@ int CLIApp::run_algo(const Config& config) {
             return 0;
         }
         default:
-            return 0;
+            // 无动作（如 `besq algo` 裸命令）不再静默成功——按解析失败处理
+            throw std::runtime_error(tr("cli.err.parse_failed"));
     }
 }
 
@@ -745,11 +747,19 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         if (result.command_path.empty())
             return bind_solve_result(result);
         const std::string_view c0 = result.command_path.front();
-        if (c0 == "solve")        return bind_solve_result(*std::get<20>(result.value));
-        if (c0 == "profile")      return bind_profile_result(*std::get<21>(result.value));
-        if (c0 == "algo")         return bind_algo_result(*std::get<22>(result.value));
-        if (c0 == "serve")        return bind_serve_result(*std::get<23>(result.value));
-        return bind_solve_result(result);   // 不可达（命令名校验保证）
+        Config cfg;
+        if (c0 == "solve")        cfg = bind_solve_result(*std::get<20>(result.value));
+        else if (c0 == "profile") cfg = bind_profile_result(*std::get<21>(result.value));
+        else if (c0 == "algo")    cfg = bind_algo_result(*std::get<22>(result.value));
+        else if (c0 == "serve")   cfg = bind_serve_result(*std::get<23>(result.value));
+        else                      return bind_solve_result(result);   // 不可达（命令名校验保证）
+        // 命令前全局旗标转发：help/verbose/version 三旗标已复制进每张子表，顶层
+        // 结果同样持有（索引 0/1/2）。仅在置位时转发——子结果自身旗标保持权威。
+        const auto& top = result.value;
+        if (std::get<0>(top)) cfg.help    = true;
+        if (std::get<1>(top)) cfg.verbose = true;
+        if (std::get<2>(top)) cfg.version = true;
+        return cfg;
     };
 
     if (!result.ok()) {
@@ -766,6 +776,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
                 case cli::ParseErrorCode::unknown_option:
                 case cli::ParseErrorCode::invalid_value:
                 case cli::ParseErrorCode::missing_value:
+                case cli::ParseErrorCode::unknown_command:
                     throw std::runtime_error(tr("cli.err.parse_failed"));
                 default: break;
             }
@@ -884,7 +895,12 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
             std::vector<Item> items;
             for (const auto& seg : string_utils::split(config.source, ',')) {
                 if (seg.empty()) continue;
-                items.push_back(ItemParser::parse(seg, ctx.enchantments(), ctx.equipment()));
+                try {
+                    items.push_back(ItemParser::parse(seg, ctx.enchantments(), ctx.equipment()));
+                } catch (const std::exception&) {
+                    // 混排/非法段：报两种接受形式，而非裸 ItemParser 错误
+                    throw std::runtime_error(tr_fmt("cli.err.invalid_source_forms", config.source));
+                }
             }
             if (items.empty())
                 throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.source));

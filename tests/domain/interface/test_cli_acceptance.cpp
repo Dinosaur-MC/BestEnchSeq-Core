@@ -980,6 +980,25 @@ TEST_CASE("cli_slice1_mode_inference") {
         expect_throws([&] { CLIApp::build_solve_request(cfg, ctx); },
                       "--input + --source rejected (inventory_rejects_source)");
     }
+    {
+        // 混排/非法段：报错点名两种接受形式（含 "item list"），而非裸 ItemParser 错误
+        register_builtin_translations(LanguageManager::instance());
+        LanguageManager::instance().select("en_US");
+        CLIApp::Config cfg;
+        cfg.target = "diamond_sword[sharpness=5]";
+        cfg.source = "sharpness=5,diamond_sword";
+        bool threw = false;
+        std::string what;
+        try {
+            CLIApp::build_solve_request(cfg, ctx);
+        } catch (const std::exception& e) {
+            threw = true;
+            what = e.what();
+        }
+        expect(threw, "mixed source list should throw");
+        expect(what.find("item list") != std::string::npos,
+               "mixed-list error names the accepted forms (item list)");
+    }
     TEST_PASS("mode inference");
 }
 
@@ -1039,4 +1058,37 @@ TEST_CASE("cli_slice1_set_dir_parse_guard") {
                       "set_dir empty -> run throws empty_dir");
     }
     TEST_PASS("set_dir parse guard");
+}
+
+TEST_CASE("cli_slice1_precommand_flags_forward") {
+    {
+        const char* argv[] = {"besq", "--help", "serve"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.help, "pre-command --help forwarded to serve dispatch");
+    }
+    {
+        const char* argv[] = {"besq", "--verbose", "solve", "--target", "x"};
+        auto cfg = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(cfg.verbose, "pre-command --verbose forwarded");
+    }
+    {
+        const char* argv[] = {"besq", "serve", "--help"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.help, "post-command --help still works");
+    }
+    TEST_PASS("pre-command flags forwarded");
+}
+
+TEST_CASE("cli_slice1_unknown_command_fatal") {
+    {
+        const char* argv[] = {"besq", "profile", "foo"};
+        expect_throws([&] { CLIApp::parse(3, const_cast<char**>(argv)); },
+                      "nested unknown_command now fatal");
+    }
+    {
+        const char* argv[] = {"besq", "frobnicate", "--target", "x"};
+        expect_throws([&] { CLIApp::parse(4, const_cast<char**>(argv)); },
+                      "top-level unknown_command now fatal");
+    }
+    TEST_PASS("unknown_command fatal");
 }
