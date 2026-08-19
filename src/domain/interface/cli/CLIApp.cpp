@@ -183,7 +183,7 @@ int CLIApp::run(int argc, char* argv[]) {
     }
 
     if (config.help) {
-        std::cout << help_text(argv[0]) << std::endl;
+        std::cout << help_text(argv[0], config.command_path) << std::endl;
         return 0;
     }
     if (config.version) {
@@ -982,6 +982,8 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
 
     if (!result.ok()) {
         Config early_cfg = dispatch();
+        early_cfg.command_path = result.command_path;
+        if (result.help_requested_anywhere()) early_cfg.help = true;
         if (early_cfg.help)  return early_cfg;
         if (early_cfg.version) return early_cfg;
         for (auto& msg : result.all_messages())
@@ -1003,6 +1005,8 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
 
     Config cfg = dispatch();
     cfg.command_path = result.command_path;
+    if (result.help_requested_anywhere())
+        cfg.help = true;
     if (cfg.help || cfg.version)
         return cfg;
 

@@ -1248,3 +1248,28 @@ TEST_CASE("cli_slice2a_datapack_errors") {
     }
     TEST_PASS("datapack errors");
 }
+
+// ---------------------------------------------------------------------------
+// Task 6 (slice 2a): 子命令帮助管线化 — command_path + help_requested_anywhere
+// ---------------------------------------------------------------------------
+
+TEST_CASE("cli_slice2a_subhelp") {
+    {   // profile --help：cfg.help + command_path 记录
+        const char* argv[] = {"besq", "profile", "--help"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.help, "profile --help sets help");
+        expect(cfg.command_path.size() == 1 && cfg.command_path[0] == "profile", "path recorded");
+    }
+    {   // 叶子帮助：profile list --help 置 help（help_requested_anywhere）
+        const char* argv[] = {"besq", "profile", "list", "--help"};
+        auto cfg = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(cfg.help, "leaf --help bubbles up");
+        expect(cfg.command_path.size() == 2, "leaf path recorded");
+    }
+    {   // set_dir --help 不再抛 empty_dir（run 层显示帮助）
+        const char* argv[] = {"besq", "profile", "set_dir", "--help"};
+        int rc = CLIApp().run(4, const_cast<char**>(argv));
+        expect(rc == 0, "set_dir --help exits 0 (shows help, no action)");
+    }
+    TEST_PASS("subhelp plumbing");
+}
