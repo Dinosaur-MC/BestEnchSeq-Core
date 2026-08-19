@@ -133,6 +133,7 @@
     "cli.cmd.info_desc": "Show profile metadata",
     "cli.cmd.publish_desc": "Publish a profile as a self-contained file",
     "cli.cmd.inspect_desc": "Inspect a profile's own data (enchantments/equipment/tags)",
+    "cli.cmd.algo_inspect_desc": "Inspect an algorithm's details",
     "cli.cmd.inspect_kind_desc": "What to inspect: equip | ench | tags",
     "cli.msg.dir_set": "Directory set to: {0}",
     "cli.msg.version": "{0} version {1}",

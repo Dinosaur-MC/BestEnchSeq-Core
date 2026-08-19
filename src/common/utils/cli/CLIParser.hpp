@@ -344,6 +344,21 @@ std::string format_help_level(std::string_view prog, const std::tuple<Entries...
     }(std::index_sequence_for<Entries...>{});
     if (has_commands(entries)) r += " <command>";
     r += "\n\n";
+    // ── 0.5. 位置参数帮助行（新增）：用法行之后、选项分组之前；声明序一行一个。
+    //    让 `set_dir --help` 等展示 <dir> 的含义；无 Positional 时整段为空。
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]{ using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (requires { typename ET::value_type; })
+                if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
+                    const auto& e = std::get<Is>(entries);
+                    std::string l = "  <";
+                    l += e.name; l += ">";
+                    while (l.size() < 28) l += ' ';
+                    l += trans(e.help_key);
+                    l += '\n'; r += l;
+                }
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
     // ── 1. 选项分组（原 format_help 第 298–313 行搬移；_table.entries → entries，_help_trans → trans）──
     struct GroupEntry { std::string_view name; size_t first_idx; };
     auto groups = [&]() {

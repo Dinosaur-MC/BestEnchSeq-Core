@@ -2,11 +2,15 @@
 #include "common/io/json.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/components/TagResolver.h"
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <string>
 #include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace orchestration {
 
@@ -15,10 +19,16 @@ namespace {
 constexpr int64_t kPackFormat = 61;   // MC 1.21+
 
 /// profile key 的 NSID 名空间（含 ':' 取前缀；否则 key 本身）。
-std::string profile_ns(const Profile& p) {
+/// 防御（仅病态 key 触发）：ns 含 '/' 或 ".." 段会逃逸 data/<ns>/ 目录布局，
+/// 拒绝导出（返回 false）。
+static bool profile_ns(const Profile& p, std::string& out_ns) {
     const std::string& name = p.name();
     const auto colon = name.find(':');
-    return colon == std::string::npos ? name : name.substr(0, colon);
+    out_ns = colon == std::string::npos ? name : name.substr(0, colon);
+    if (out_ns.empty() || out_ns.find('/') != std::string::npos ||
+        out_ns == ".." || out_ns.find("..") != std::string::npos)
+        return false;
+    return true;
 }
 
 bool write_file(const std::filesystem::path& path, const std::string& content, std::string& error) {
@@ -44,28 +54,40 @@ std::string tail_of(const NSID& id) {
 
 bool DatapackExporter::export_profile(const Profile& profile,
                                       const std::filesystem::path& dir,
-                                      std::string& error) {
+                                      std::string& error,
+                                      ExportError& code) {
+    code = ExportError::none;
     // ── 目标检查：已存在且非空 → 拒绝；创建目录树 ──
     std::error_code ec;
     if (std::filesystem::exists(dir, ec)) {
-        if (!std::filesystem::is_directory(dir, ec))
-            { error = "not a directory: " + dir.string(); return false; }
-        for (auto it = std::filesystem::directory_iterator(dir, ec);
-             !ec && it != std::filesystem::directory_iterator(); ++it) {
-            { error = "directory not empty: " + dir.string(); return false; }
+        if (!std::filesystem::is_directory(dir, ec)) {
+            code = ExportError::not_directory;
+            error = "not a directory: " + dir.string(); return false;
+        }
+        // 迭代器构造失败（权限/IO）在迭代前检查：原实现把 ec 塞进循环条件，
+        // ec 置位时循环体被跳过 → “读不了”被误当成“空目录”放行。
+        auto it = std::filesystem::directory_iterator(dir, ec);
+        if (ec) { code = ExportError::io; error = "cannot read " + dir.string(); return false; }
+        for (; it != std::filesystem::directory_iterator(); ++it) {
+            code = ExportError::not_empty;
+            error = "directory not empty: " + dir.string(); return false;
         }
     }
     std::filesystem::create_directories(dir, ec);
-    if (ec) { error = "cannot create " + dir.string() + ": " + ec.message(); return false; }
+    if (ec) { code = ExportError::io; error = "cannot create " + dir.string() + ": " + ec.message(); return false; }
 
-    const std::string ns = profile_ns(profile);
+    std::string ns;
+    if (!profile_ns(profile, ns)) {
+        code = ExportError::io;
+        error = "invalid profile namespace"; return false;
+    }
     const auto ench_dir   = dir / "data" / ns / "enchantment";
     const auto tag_item_dir = dir / "data" / ns / "tags" / "item";
     const auto tag_ench_dir = dir / "data" / ns / "tags" / "enchantment";
     std::filesystem::create_directories(ench_dir, ec);
     std::filesystem::create_directories(tag_item_dir, ec);
     std::filesystem::create_directories(tag_ench_dir, ec);
-    if (ec) { error = "cannot create data dirs"; return false; }
+    if (ec) { code = ExportError::io; error = "cannot create data dirs"; return false; }
 
     // ── pack.mcmeta ──
     {
@@ -76,7 +98,7 @@ bool DatapackExporter::export_profile(const Profile& profile,
             ? profile.name() : profile.metadata().description;
         pack["description"] = Json(desc);
         o["pack"] = std::move(pack);
-        if (!write_file(dir / "pack.mcmeta", o.to_string(), error)) return false;
+        if (!write_file(dir / "pack.mcmeta", o.to_string(), error)) { code = ExportError::io; return false; }
     }
 
     // ── data/<ns>/enchantment/<tail>.json ──
@@ -101,7 +123,7 @@ bool DatapackExporter::export_profile(const Profile& profile,
         if (e.limited_level_provided)
             o["limited_level"] = Json(static_cast<int64_t>(e.limited_level));
         if (e.is_treasure) treasure_ids.push_back(full);
-        if (!write_file(ench_dir / (tail + ".json"), o.to_string(), error)) return false;
+        if (!write_file(ench_dir / (tail + ".json"), o.to_string(), error)) { code = ExportError::io; return false; }
     }
 
     // ── data/<ns>/tags/item/<category>.json（装备按类别分组；值 = 完整 NSID）──
@@ -112,7 +134,7 @@ bool DatapackExporter::export_profile(const Profile& profile,
         Json arr = Json::array();
         for (const auto& id : ids) arr.push_back(Json(id));
         o["values"] = std::move(arr);
-        if (!write_file(tag_item_dir / (cat + ".json"), o.to_string(), error)) return false;
+        if (!write_file(tag_item_dir / (cat + ".json"), o.to_string(), error)) { code = ExportError::io; return false; }
     }
 
     // ── 被引用标签 → tags/item/<name>.json（values 取 resolver 解析集）──
@@ -139,14 +161,18 @@ bool DatapackExporter::export_profile(const Profile& profile,
             const auto* vals = res->get_tag(ns2, name);
             if (!vals) continue;
             const auto tag_file = tag_item_dir / (name + ".json");   // name 可含 '/' → 建父目录
-            std::error_code ec2;
-            std::filesystem::create_directories(tag_file.parent_path(), ec2);
-            if (ec2) { error = "cannot create tag dirs"; return false; }
+            // 仅当确有父目录时创建（name 无 '/' 时父目录即已存在的 tag_item_dir；
+            // 空 parent_path 属病态相对路径，跳过创建以免对 "." 误操作）。
+            if (!tag_file.parent_path().empty()) {
+                std::error_code ec2;
+                std::filesystem::create_directories(tag_file.parent_path(), ec2);
+                if (ec2) { code = ExportError::io; error = "cannot create tag dirs"; return false; }
+            }
             Json o = Json::object();
             Json arr = Json::array();
             for (const auto& v : *vals) arr.push_back(Json(v));
             o["values"] = std::move(arr);
-            if (!write_file(tag_file, o.to_string(), error)) return false;
+            if (!write_file(tag_file, o.to_string(), error)) { code = ExportError::io; return false; }
         }
     }
 
@@ -158,12 +184,12 @@ bool DatapackExporter::export_profile(const Profile& profile,
         Json arr = Json::array();
         for (const auto& id : treasure_ids) arr.push_back(Json(id));
         o["values"] = std::move(arr);
-        if (!write_file(tag_ench_dir / "treasure.json", o.to_string(), error)) return false;
+        if (!write_file(tag_ench_dir / "treasure.json", o.to_string(), error)) { code = ExportError::io; return false; }
         if (ns != "minecraft") {
             const auto mc_dir = dir / "data" / "minecraft" / "tags" / "enchantment";
             std::filesystem::create_directories(mc_dir, ec);
-            if (ec) { error = "cannot create minecraft tag dir"; return false; }
-            if (!write_file(mc_dir / "treasure.json", o.to_string(), error)) return false;
+            if (ec) { code = ExportError::io; error = "cannot create minecraft tag dir"; return false; }
+            if (!write_file(mc_dir / "treasure.json", o.to_string(), error)) { code = ExportError::io; return false; }
         }
     }
 

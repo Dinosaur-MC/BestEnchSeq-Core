@@ -357,9 +357,13 @@ int CLIApp::run_profile(const Config& config) {
                 // 导出 active profile 的 own data（激活后取）
                 const Profile& p = _ctx.profile(_ctx.active_profile());
                 std::string error;
-                if (!orchestration::DatapackExporter::export_profile(p, config.export_file, error))
+                orchestration::ExportError code = orchestration::ExportError::none;
+                if (!orchestration::DatapackExporter::export_profile(p, config.export_file, error, code)) {
+                    if (code == orchestration::ExportError::not_empty)
+                        throw std::runtime_error(tr_fmt("cli.err.export_dir_not_empty", config.export_file));
                     throw std::runtime_error(error.empty()
                         ? tr_fmt("main.err.export_failed", config.export_file) : error);
+                }
                 LOG_INFO("%s", tr_fmt("main.msg.profile_exported", config.export_file).c_str());
                 flush_output();
                 return 0;
@@ -459,6 +463,8 @@ int CLIApp::run_profile(const Config& config) {
             };
             auto compute_selected = [&]() {
                 // fields 空 → 全列；否则按逗号选择（未知列报错）。仅行循环前调用一次。
+                // 重复列名（如 `--fields id,id`）去重，保留首次出现（review：重复列
+                // 会让 json 行键重复覆盖、text 出现两个同名表头）。
                 if (config.inspect_fields.empty()) {
                     for (size_t i = 0; i < headers.size(); ++i) selected.push_back(i);
                     return;
@@ -469,7 +475,9 @@ int CLIApp::run_profile(const Config& config) {
                     if (it == headers.end())
                         throw std::runtime_error(tr_fmt("cli.err.invalid_inspect_field", name,
                             string_utils::join(headers, ", ")));
-                    selected.push_back(static_cast<size_t>(it - headers.begin()));
+                    const size_t idx = static_cast<size_t>(it - headers.begin());
+                    if (std::find(selected.begin(), selected.end(), idx) == selected.end())
+                        selected.push_back(idx);
                 }
             };
             auto pick = [&](const std::vector<std::string>& all) {
@@ -516,6 +524,10 @@ int CLIApp::run_profile(const Config& config) {
                 }
             }
             const size_t total = rows.size();
+            // --limit 负值非法（分页前校验；`--limit=-1` 绑定 -1 走到这里，
+            // `--limit -1` 空格形态在解析层即 missing_value）
+            if (config.inspect_limit < 0)
+                throw std::runtime_error(tr_fmt("cli.err.invalid_value", std::to_string(config.inspect_limit)));
             if (config.inspect_limit > 0) {
                 const size_t page = config.inspect_page > 0 ? static_cast<size_t>(config.inspect_page) : 1;
                 const size_t start = (page - 1) * static_cast<size_t>(config.inspect_limit);
@@ -600,6 +612,10 @@ int CLIApp::run_algo(const Config& config) {
                 d = _ctx.algorithm_detail(config.algo_target);
             } catch (const std::exception&) {
                 auto algos = _ctx.list_algorithms();
+                // 目标确实在算法列表中 → 算法存在但 detail 查询失败（插件损坏/
+                // 元数据异常）：保留原始异常，不误报 unknown_algo。
+                if (std::find(algos.begin(), algos.end(), config.algo_target) != algos.end())
+                    throw;
                 throw std::runtime_error(tr_fmt("pipeline.err.unknown_algo",
                     config.algo_target, string_utils::join(algos, ", ")));
             }
@@ -677,7 +693,7 @@ const auto ALGO_OPTS = OptionTable{
     Command<Positional<std::string>>{.name = "set_dir", .help_key = "cli.cmd.set_dir_desc",
         .table = OptionTable{Positional<std::string>{.name = "dir", .help_key = "cli.help.dir_desc"}}},
     Command<Positional<std::string>, Option<std::string>>{
-        .name = "inspect", .help_key = "cli.cmd.inspect_desc",
+        .name = "inspect", .help_key = "cli.cmd.algo_inspect_desc",
         .table = OptionTable{
             Positional<std::string>{.name = "algo", .help_key = "cli.help.algorithm_desc"},
             Option<std::string>{.long_name = "format", .help_key = "cli.help.inspect_format_desc", .default_v = std::string("text")},

@@ -745,3 +745,33 @@ TEST_CASE("test_subcmd_help_anywhere") {
     expect(!top.help_requested_anywhere(), "no help anywhere -> false");
     TEST_PASS("help_requested_anywhere");
 }
+
+TEST_CASE("test_subcmd_help_anywhere_deep") {
+    // 双层命令嵌套：ParseResult<Flag, Command<Command<Flag>>> —— help 置在最内层
+    // 叶子，help_requested_anywhere 必须穿透两层递归为 true；清除后为 false。
+    ParseResult<Flag, Command<Command<Flag>>> top;
+    expect(!top.help_requested_anywhere(), "deep empty: no help anywhere");
+    {
+        ParseResult<Flag> leaf;
+        leaf.help_requested = true;
+        ParseResult<Command<Flag>> mid;
+        std::get<0>(mid.value) = std::move(leaf);
+        std::get<1>(top.value) = std::move(mid);
+        expect(top.help_requested_anywhere(), "innermost leaf help bubbles up through two command layers");
+        expect(!top.help_requested, "top layer itself has no help flag");
+    }
+    {
+        // 清除叶子（mid 无值、无 help）→ false
+        ParseResult<Command<Flag>> mid;
+        std::get<1>(top.value) = std::move(mid);
+        expect(!top.help_requested_anywhere(), "cleared deep leaf -> no help anywhere");
+    }
+    {
+        // 中间层置 help（叶子无）同样生效
+        ParseResult<Command<Flag>> mid;
+        mid.help_requested = true;
+        std::get<1>(top.value) = std::move(mid);
+        expect(top.help_requested_anywhere(), "mid-layer help counts through recursion");
+    }
+    TEST_PASS("help_requested_anywhere deep nesting");
+}

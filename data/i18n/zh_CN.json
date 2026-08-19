@@ -133,6 +133,7 @@
     "cli.cmd.info_desc": "显示 profile 元数据",
     "cli.cmd.publish_desc": "将 profile 发布为自包含文件",
     "cli.cmd.inspect_desc": "检查 profile 自身数据 (附魔/装备/标签)",
+    "cli.cmd.algo_inspect_desc": "检查算法的详细信息",
     "cli.cmd.inspect_kind_desc": "检查内容: equip | ench | tags",
     "cli.msg.dir_set": "目录已设置为: {0}",
     "cli.msg.version": "{0} version {1}",

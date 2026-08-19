@@ -332,9 +332,12 @@ McOfficialParser::derive_equipment_from_tag_files(
         int32_t durability   = get_durability(item_id, item_props);
         std::string category = derive_category(item_id, item_props);
 
-        if (durability <= 0 && category == item_id.substr(item_id.find(':') + 1)) {
-            if (item_id.find(':') == std::string::npos) continue;
-        }
+        // durability-0 + 回退类别（category == id 尾部 ⇒ item_properties 无该物品
+        // 的耐久/类别数据）⇒ 非装备，无论是否带命名空间一律跳过。原实现内层
+        // `if (find(':') == npos) continue` 只跳过裸 id，命名空间 id 的耐久-0 垃圾
+        // （compass/carved_pumpkin 等）被当成装备保留（review 判定条件写反）。
+        if (durability <= 0 && category == item_id.substr(item_id.find(':') + 1))
+            continue;
 
         business::loader::EquipmentData eq;
         eq.id             = item_id;
