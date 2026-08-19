@@ -409,19 +409,19 @@ TEST_CASE("test_double_dash_stops_parsing") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_all_options") {
-    const char* argv[] = {"besq",       "--target", "sword",    "--source", "sharp=5",        "--mode", "inventory",
-                          "--platform", "bedrock",  "--format", "json",     "--solutions",    "3",      "--input",
-                          "in.json",    "--output", "out.json", "--import", "myreg,custom:v1"};
-    auto config = CLIApp::parse(19, const_cast<char**>(argv));
+    // NOTE: --mode / --import were removed in slice 1 (mode is inferred from
+    // --source; import lives under `profile import` — see test_profile_import_parse).
+    const char* argv[] = {"besq", "--target", "sword", "--source", "sharp=5",
+                          "--platform", "bedrock", "--format", "json", "--solutions", "3",
+                          "--input", "in.json", "--output", "out.json"};
+    auto config = CLIApp::parse(15, const_cast<char**>(argv));
     expect(config.target == "sword", "target");
     expect(config.source == "sharp=5", "source");
-    expect(config.mode == "inventory", "mode");
     expect(config.platform == "bedrock", "platform");
     expect(config.format == "json", "format");
     expect(config.solutions == 3, "solutions");
     expect(config.input.has_value() && config.input.value() == "in.json", "input");
     expect(config.output.has_value() && config.output.value() == "out.json", "output");
-    expect(config.import_files.has_value() && config.import_files.value() == "myreg,custom:v1", "import");
     std::cout << "  PASS: test_all_options" << std::endl;
 }
 
@@ -438,14 +438,16 @@ TEST_CASE("test_source_flag") {
 }
 
 // ---------------------------------------------------------------------------
-// --import default (nullopt when not specified)
+// --import migrated to `besq profile import` — parse the subcommand form
 // ---------------------------------------------------------------------------
 
-TEST_CASE("test_import_default_nullopt") {
-    const char* argv[] = {"besq", "--target", "sword"};
-    auto config = CLIApp::parse(3, const_cast<char**>(argv));
-    expect(!config.import_files.has_value(), "--import should be nullopt when not specified");
-    std::cout << "  PASS: test_import_default_nullopt" << std::endl;
+TEST_CASE("test_profile_import_parse") {
+    const char* argv[] = {"besq", "profile", "import", "myreg.json"};
+    auto config = CLIApp::parse(4, const_cast<char**>(argv));
+    expect(config.cmd == CLIApp::Config::Cmd::profile, "profile import: cmd == profile");
+    expect(config.profile_action == CLIApp::Config::ProfileAction::import, "profile import: action import");
+    expect(config.profile_target == "myreg.json", "profile import: file positional");
+    std::cout << "  PASS: test_profile_import_parse" << std::endl;
 }
 
 } // namespace

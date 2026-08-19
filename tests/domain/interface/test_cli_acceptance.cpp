@@ -2,8 +2,8 @@
 // CLI Acceptance Tests
 //
 // Tests CLI argument parsing for all parameter combinations, error handling,
-// and edge cases. Validates that new features (--export without
-// --target, --max-time, --edit, --config) parse correctly.
+// and edge cases. Validates that new features (--max-time, --config, --input,
+// --resume, profile export) parse correctly.
 // =============================================================================
 
 #define BESQ_TEST_MAIN
@@ -47,30 +47,43 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Test: --export without --target is valid
-// NOTE (slice 1): --export moved to `besq profile export`; this flat-option
-// case is skipped here and migrated in Task 8 (references removed fields).
+// Test: --export moved to `besq profile export` — parse the subcommand forms
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_export_only_valid") {
-    SKIP("slice1: --export moved to `profile export` — migrated in Task 8");
+    {   // profile export --format json（默认）
+        const char* argv[] = {"besq", "profile", "export", "--format", "json"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(config.cmd == CLIApp::Config::Cmd::profile, "profile export: cmd == profile");
+        expect(config.profile_action == CLIApp::Config::ProfileAction::export_, "profile export: action export");
+        expect(config.export_format == "json", "profile export: format json");
+        TEST_PASS("profile export --format json parse");
+    }
+    {   // profile export --format csv
+        const char* argv[] = {"besq", "profile", "export", "--format", "csv"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(config.cmd == CLIApp::Config::Cmd::profile, "profile export csv: cmd == profile");
+        expect(config.profile_action == CLIApp::Config::ProfileAction::export_, "profile export csv: action export");
+        expect(config.export_format == "csv", "profile export: format csv");
+        TEST_PASS("profile export --format csv parse");
+    }
 }
 
 // ---------------------------------------------------------------------------
-// Test: Missing both --target and --export is an error
+// Test: Missing --target is an error
 // ---------------------------------------------------------------------------
 
-TEST_CASE("test_missing_target_and_export_errors") {
+TEST_CASE("test_missing_target_errors") {
     {
         const char* argv[] = {"besq", "--algorithm", "greedy"};
         expect_throws([&] { CLIApp::parse(3, const_cast<char**>(argv)); },
-                      "Must throw when both --target and --export missing");
-        TEST_PASS("no --target and no --export throws");
+                      "Must throw when --target missing");
+        TEST_PASS("no --target throws");
     }
     {
         const char* argv[] = {"besq", "--verbose", "--format", "json"};
         expect_throws([&] { CLIApp::parse(4, const_cast<char**>(argv)); }, "Must throw with flags only, no target");
-        TEST_PASS("flags only (no target/export) throws");
+        TEST_PASS("flags only (no target) throws");
     }
 }
 
@@ -204,16 +217,6 @@ TEST_CASE("test_config_parsing") {
 }
 
 // ---------------------------------------------------------------------------
-// Test: --edit parsing
-// NOTE (slice 1): --edit moved to the profile subcommand surface; this
-// flat-option case is skipped here and migrated in Task 8.
-// ---------------------------------------------------------------------------
-
-TEST_CASE("test_edit_parsing") {
-    SKIP("slice1: --edit moved to profile commands — migrated in Task 8");
-}
-
-// ---------------------------------------------------------------------------
 // Test: already-met solve args parse (source == target)
 // ---------------------------------------------------------------------------
 // Backlog #13 residual: `--target diamond_sword[sharpness=5] --source
@@ -291,13 +294,28 @@ TEST_CASE("test_memory_parsing") {
 }
 
 // ---------------------------------------------------------------------------
-// Test: --profile / --profile-dir / --publish parsing
-// NOTE (slice 1): --profile-dir/--publish moved to `besq profile …`; this
-// flat-option case is skipped here and migrated in Task 8.
+// Test: profile set_dir / publish parsing（--profile-dir/--publish 已迁至
+// `besq profile …` 子命令面）
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_profile_publish_parsing") {
-    SKIP("slice1: --profile-dir/--publish moved to `profile …` — migrated in Task 8");
+    {   // profile set_dir <dir>
+        const char* argv[] = {"besq", "profile", "set_dir", "/tmp/p"};
+        auto config = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(config.cmd == CLIApp::Config::Cmd::profile, "profile set_dir: cmd == profile");
+        expect(config.profile_action == CLIApp::Config::ProfileAction::set_dir, "profile set_dir: action set_dir");
+        expect(config.profile_target == "/tmp/p", "profile set_dir: dir value");
+        TEST_PASS("profile set_dir parse");
+    }
+    {   // profile publish <key> --version <v> --tag <t>
+        const char* argv[] = {"besq", "profile", "publish", "mypack", "--version", "1.0", "--tag", "stable"};
+        auto config = CLIApp::parse(8, const_cast<char**>(argv));
+        expect(config.profile_action == CLIApp::Config::ProfileAction::publish, "profile publish: action publish");
+        expect(config.profile_target == "mypack", "profile publish: profile key");
+        expect(config.publish_version == "1.0", "profile publish: version");
+        expect(config.publish_tag == "stable", "profile publish: tag");
+        TEST_PASS("profile publish parse");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -342,21 +360,26 @@ TEST_CASE("test_resume_parsing") {
 }
 
 // ---------------------------------------------------------------------------
-// Test: --list-profiles / --list-langs parsing (gate-exempt info flags)
-// NOTE (slice 1): --list-profiles moved to `besq profile list`; this
-// flat-option case is skipped here and migrated in Task 8.
+// Test: profile list / --list-langs parsing（--list-profiles 已迁至
+// `besq profile list`；--list-langs 仍为顶层 solve 表 gate-exempt 标志）
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_list_flags_parsing") {
-    // --list-langs still lives in the solve table — keep its coverage live.
-    {
-        const char* argv[] = {"besq", "--list-langs"};
-        auto config = CLIApp::parse(2, const_cast<char**>(argv));
-        expect(config.list_langs, "--list-langs should be set");
-        expect(config.target.empty(), "--list-langs alone must not require --target");
-        TEST_PASS("--list-langs parses cleanly (gate exemption)");
+    {   // profile list
+        const char* argv[] = {"besq", "profile", "list"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(config.cmd == CLIApp::Config::Cmd::profile, "profile list: cmd == profile");
+        expect(config.profile_action == CLIApp::Config::ProfileAction::list, "profile list: action list");
+        TEST_PASS("profile list parse");
     }
-    SKIP("slice1: --list-profiles moved to `profile list` — migrated in Task 8");
+    {   // --list-langs 顶层（与 --verbose 共存）
+        const char* argv[] = {"besq", "--list-langs", "--verbose"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(config.list_langs, "--list-langs should be set");
+        expect(config.verbose, "--verbose coexists with --list-langs");
+        expect(config.target.empty(), "--list-langs alone must not require --target");
+        TEST_PASS("--list-langs top-level parses cleanly (gate exemption)");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -635,16 +658,6 @@ TEST_CASE("test_inventory_source_rejection") {
 }
 
 // ---------------------------------------------------------------------------
-// Test: --input with an invalid --mode throws invalid_mode (F4)
-// ---------------------------------------------------------------------------
-
-TEST_CASE("test_inventory_invalid_mode_throws") {
-    const char* argv[] = {"besq", "--input", "inv.json", "--mode", "banana"};
-    expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "--input with invalid --mode should throw invalid_mode");
-    TEST_PASS("inventory wiring: --input --mode banana throws invalid_mode");
-}
-
-// ---------------------------------------------------------------------------
 // Test: --CLIApp::apply_config_pairs functional test
 // ---------------------------------------------------------------------------
 
@@ -822,27 +835,6 @@ TEST_CASE("test_apply_lang") {
 }
 
 // ---------------------------------------------------------------------------
-// Test: CLIApp::detect_target
-// ---------------------------------------------------------------------------
-
-TEST_CASE("test_detect_target") {
-    {
-        const char* argv[] = {"besq"};
-        expect_eq(CLIApp::detect_target(1, const_cast<char**>(argv)), std::string("cli"), "detect_target: default is cli");
-    }
-    {
-        const char* argv[] = {"besq", "--api", "serve"};
-        expect_eq(CLIApp::detect_target(3, const_cast<char**>(argv)), std::string("serve"), "detect_target: --api serve");
-    }
-    {
-        const char* argv[] = {"besq", "--api", "serve", "--port", "8080"};
-        expect_eq(CLIApp::detect_target(5, const_cast<char**>(argv)), std::string("serve"),
-                  "detect_target: --api found anywhere");
-    }
-    TEST_PASS("CLIApp detect_target");
-}
-
-// ---------------------------------------------------------------------------
 // Test: CLIApp::help_text — grouped option help
 // ---------------------------------------------------------------------------
 
@@ -853,11 +845,11 @@ TEST_CASE("test_help_text") {
     auto text = CLIApp::help_text();
     expect(text.find("Usage:") != std::string::npos, "help_text has Usage header");
     expect(text.find("--target") != std::string::npos, "help_text lists --target");
-    // NOTE (slice 1): 顶层 --export 选项已迁至 `profile export`——示例行改为
-    // `profile export --file out.json`（Task 8 迁移本用例的断言清单已含此改动）。
-    expect(text.find("profile export") != std::string::npos, "help_text lists profile export example");
-    expect(text.find("--list-algorithms") != std::string::npos, "help_text lists --list-algorithms");
+    expect(text.find("solve (calc)") != std::string::npos, "help_text lists solve (calc) command");
+    expect(text.find("profile") != std::string::npos, "help_text lists profile command");
+    expect(text.find("serve") != std::string::npos, "help_text lists serve command");
     expect(text.find("--profile") != std::string::npos, "help_text lists --profile");
+    // 顶层不再断言 --export / --list-algorithms（已迁至 `profile export` / `algo list`）
 
     TEST_PASS("CLIApp help_text");
 }

@@ -17,9 +17,12 @@ add_executable(test_system_cli
 # "framework/test_utils.h" lives one level up (tests/); PROJECT_ROOT is
 # tests/CMakeLists.txt's variable (inherited into this subdirectory scope).
 # src/ is added so the header-only common/utils/EnvUtil.hpp (get_env) resolves.
+# src/common is added for AppConfig.h (config_file_path — set_dir roundtrip):
+# its chain common/log/log.hpp → Logger.h pulls in "utils/EventLoop.hpp".
 target_include_directories(test_system_cli PRIVATE
     ${PROJECT_ROOT}
     ${PROJECT_ROOT}/src
+    ${PROJECT_ROOT}/src/common
 )
 
 # ── Binary / project-root as compile-time macros ───────────────────────

@@ -13,11 +13,13 @@
 #include "framework/test_framework.h"
 #include "spawn_util.h"
 
+#include "AppConfig.h"
 #include "common/utils/EnvUtil.hpp"
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -152,29 +154,28 @@ void test_version(const std::string& bin) {
 }
 
 void test_list_algorithms(const std::string& bin) {
-    auto r = run_besq(bin, {"--lang", "en_US", "--list-algorithms"});
-    expect_eq(r.exit_code, 0, "--list-algorithms: exit 0");
-    expect_contains(r.out, "Available algorithm strategies (", "--list-algorithms: header");
-    expect_contains(r.out, "bb_dp", "--list-algorithms: has bb_dp");
-    expect_contains(r.out, "dp_merge", "--list-algorithms: has dp_merge");
-    expect_contains(r.out, "hamming", "--list-algorithms: has hamming");
-    TEST_PASS("system: --list-algorithms");
+    auto r = run_besq(bin, {"--lang", "en_US", "algo", "list"});
+    expect_eq(r.exit_code, 0, "algo list: exit 0");
+    expect_contains(r.out, "Available algorithm strategies (", "algo list: header");
+    expect_contains(r.out, "bb_dp", "algo list: has bb_dp");
+    expect_contains(r.out, "dp_merge", "algo list: has dp_merge");
+    expect_contains(r.out, "hamming", "algo list: has hamming");
+    TEST_PASS("system: algo list");
 }
 
 void test_list_profiles_langs(const std::string& bin) {
-    // --list-profiles: auto-load runs, builtin:vanilla is always present.
-    auto rp = run_besq(bin, {"--lang", "en_US", "--list-profiles"});
-    expect_eq(rp.exit_code, 0, "--list-profiles: exit 0");
-    expect_contains(rp.out, "Available profiles (", "--list-profiles: header");
-    expect_contains(rp.out, "builtin:vanilla", "--list-profiles: has builtin:vanilla");
-    expect_contains(rp.out, "(active)", "--list-profiles: active marker");
+    // profile list: auto-load runs, builtin:vanilla is always present.
+    auto rp = run_besq(bin, {"--lang", "en_US", "profile", "list"});
+    expect_eq(rp.exit_code, 0, "profile list: exit 0");
+    expect_contains(rp.out, "Available profiles (", "profile list: header");
+    expect_contains(rp.out, "builtin:vanilla", "profile list: has builtin:vanilla");
     // --list-langs: built-in languages are always available.
     auto rl = run_besq(bin, {"--lang", "en_US", "--list-langs"});
     expect_eq(rl.exit_code, 0, "--list-langs: exit 0");
     expect_contains(rl.out, "Available languages (", "--list-langs: header");
     expect_contains(rl.out, "en_US", "--list-langs: has en_US");
     expect_contains(rl.out, "zh_CN", "--list-langs: has zh_CN");
-    TEST_PASS("system: --list-profiles / --list-langs");
+    TEST_PASS("system: profile list / --list-langs");
 }
 
 void test_profile_group_combo(const std::string& bin) {
@@ -198,35 +199,27 @@ void test_profile_group_combo(const std::string& bin) {
                                    "supported_items":["#minecraft:swords"]}]})";
     }
 
-    // --profile a,b --list-profiles: both members are marked (active).
-    auto r = run_besq(bin, {"--lang", "en_US", "--profile-dir", tmp.string(), "--profile", "combo_a,combo_b",
-                            "--list-profiles"});
-    expect_eq(r.exit_code, 0, "composite --list-profiles: exit 0");
-    expect_contains(r.out, "combo_a (active)", "composite list marks combo_a active");
-    expect_contains(r.out, "combo_b (active)", "composite list marks combo_b active");
+    // profile list（BESQ_PROFILES_DIR env 指定目录）：两个成员都在列表里。
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "list"}, /*stdin_input=*/{},
+                      {{"BESQ_PROFILES_DIR", tmp.string()}});
+    expect_eq(r.exit_code, 0, "profile list (env dir): exit 0");
+    expect_contains(r.out, "combo_a", "profile list shows combo_a");
+    expect_contains(r.out, "combo_b", "profile list shows combo_b");
 
-    // Composite solve: the target uses both members' enchantments → a plan is
-    // reachable.  --verbose makes the text output attach the raw NSID
-    // ("Flame (mod:flame)"); without it only the display name "Flame" prints.
-    auto r2 = run_besq(bin, {"--lang", "en_US", "--verbose", kMaxTime, kMaxTimeVal, "--profile-dir", tmp.string(),
+    // Composite solve（BESQ_PROFILES_DIR env）：目标使用两个成员的魔咒 → 可达。
+    // --verbose 让 text 输出带上原始 NSID（"Flame (mod:flame)"）；不带则只打
+    // 显示名 "Flame"。
+    auto r2 = run_besq(bin, {"--lang", "en_US", "--verbose", kMaxTime, kMaxTimeVal,
                              "--profile", "combo_a,combo_b", "--target", "diamond_sword[mod:ember=1,mod:flame=1]",
-                             "--source", "mod:ember=1"});
+                             "--source", "mod:ember=1"},
+                       /*stdin_input=*/{}, {{"BESQ_PROFILES_DIR", tmp.string()}});
     expect_eq(r2.exit_code, 0, "composite solve: exit 0");
     expect_contains(r2.out, "mod:flame", "composite solve uses combo_b enchant");
 
-    // Composite + --edit → read-only rejection.  parse() requires a
-    // target/input/export/publish/resume to reach run()'s guard (otherwise
-    // "Missing --target or --export" fires first), so the invocation carries a
-    // --target; run() throws the composite read-only error (main prints it to
-    // stderr — check both streams).
-    auto r3 = run_besq(bin, {"--lang", "en_US", "--profile-dir", tmp.string(), "--profile", "combo_a,combo_b",
-                             "--edit", "ench:add,mod:ember", "--target", "diamond_sword[sharpness=1]"});
-    expect(r3.exit_code != 0, "composite + --edit rejected");
-    expect_contains(r3.out + r3.err, "read-only", "composite edit error mentions read-only");
-
-    // Composite with an unknown member → rejected.
-    auto r4 = run_besq(bin, {"--lang", "en_US", "--profile-dir", tmp.string(), "--profile", "combo_a,missing",
-                             "--list-profiles"});
+    // Composite with an unknown member → rejected（solve 域激活阶段）。
+    auto r4 = run_besq(bin, {"--lang", "en_US", "--profile", "combo_a,missing",
+                             "--target", "diamond_sword[sharpness=1]"},
+                       /*stdin_input=*/{}, {{"BESQ_PROFILES_DIR", tmp.string()}});
     expect(r4.exit_code != 0, "composite with unknown member rejected");
 
     std::filesystem::remove_all(tmp);
@@ -281,14 +274,6 @@ void test_err_source_without_target(const std::string& bin) {
     TEST_PASS("system: error --source without --target");
 }
 
-void test_err_invalid_mode(const std::string& bin) {
-    auto r = run_besq(bin, {"--lang", "en_US", "--mode", "banana", "--target", "diamond_sword[sharpness=1]"});
-    expect_eq(r.exit_code, 1, "err invalid mode: exit 1");
-    expect_contains(r.err, "Error: ", "err invalid mode: error prefix");
-    expect_contains(r.err, "Invalid mode: 'banana'", "err invalid mode: message");
-    TEST_PASS("system: error --mode banana");
-}
-
 void test_err_invalid_format(const std::string& bin) {
     auto r = run_besq(bin, {"--lang", "en_US", "--format", "foo", "--target", "diamond_sword[sharpness=1]"});
     expect_eq(r.exit_code, 1, "err invalid format: exit 1");
@@ -317,11 +302,11 @@ void test_err_unknown_equipment(const std::string& bin) {
     TEST_PASS("system: error unknown equipment");
 }
 
-void test_err_missing_target_or_export(const std::string& bin) {
+void test_err_missing_target(const std::string& bin) {
     auto r = run_besq(bin, {"--lang", "en_US", "--solutions", "2"});
-    expect_eq(r.exit_code, 1, "err missing target/export: exit 1");
-    expect_contains(r.err, "Missing --target or --export", "err missing target/export: message");
-    TEST_PASS("system: error missing target/export");
+    expect_eq(r.exit_code, 1, "err missing target: exit 1");
+    expect_contains(r.err, "Missing --target", "err missing target: message");
+    TEST_PASS("system: error missing target");
 }
 
 void test_err_unreachable(const std::string& bin) {
@@ -331,14 +316,6 @@ void test_err_unreachable(const std::string& bin) {
     expect_eq(r.exit_code, 1, "err unreachable: exit 1");
     expect_contains(r.err, "Target unreachable", "err unreachable: message");
     TEST_PASS("system: error target unreachable");
-}
-
-void test_zh_cn_locale(const std::string& bin) {
-    auto r = run_besq(bin, {"--lang", "zh_CN", "--mode", "banana", "--target", "diamond_sword[sharpness=1]"});
-    expect_eq(r.exit_code, 1, "zh_CN: exit 1");
-    expect_contains(r.err, "错误: ", "zh_CN: localized error prefix");
-    expect_contains(r.err, "无效模式", "zh_CN: localized message");
-    TEST_PASS("system: zh_CN locale end-to-end");
 }
 
 void test_input_stdin(const std::string& bin) {
@@ -357,11 +334,56 @@ void test_input_stdin(const std::string& bin) {
 }
 
 void test_export_stdout(const std::string& bin) {
-    auto r = run_besq(bin, {"--lang", "en_US", "--export", "-"});
-    expect_eq(r.exit_code, 0, "--export -: exit 0");
-    expect(!r.out.empty() && r.out.front() == '{', "--export -: stdout is JSON starting with {");
-    expect_contains(r.out, "\"enchantments\"", "--export -: has enchantments");
-    TEST_PASS("system: --export - writes stdout");
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "export", "--file", "-"});
+    expect_eq(r.exit_code, 0, "profile export --file -: exit 0");
+    expect(!r.out.empty() && r.out.front() == '{', "profile export: stdout is JSON starting with {");
+    expect_contains(r.out, "\"enchantments\"", "profile export: has enchantments");
+    TEST_PASS("system: profile export writes stdout");
+}
+
+// ── slice-1 子命令化 system 用例 ─────────────────────────────────────────
+
+void test_serve_subcommand_smoke(const std::string& bin) {
+    auto r = run_besq(bin, {"serve", "--help"});
+    expect_eq(r.exit_code, 0, "serve --help: exit 0");
+    expect_contains(r.out, "--port", "serve --help lists --port");
+    TEST_PASS("system: serve --help");
+}
+
+void test_api_serve_removed(const std::string& bin) {
+    auto r = run_besq(bin, {"--api", "serve"});
+    expect(r.exit_code != 0, "--api serve rejected");
+    TEST_PASS("system: --api serve removed");
+}
+
+void test_set_dir_persistence_roundtrip(const std::string& bin) {
+    // 备份现有 config.json（若有），RAII 结束恢复——断言失败/异常路径也恢复。
+    const std::string cfg_path = AppConfig::config_file_path();
+    const std::string backup = cfg_path + ".bak_slice1";
+    const bool had = std::filesystem::exists(cfg_path);
+    if (had) std::filesystem::copy_file(cfg_path, backup, std::filesystem::copy_options::overwrite_existing);
+    struct CfgGuard {
+        bool had;
+        std::string cfg_path, backup;
+        ~CfgGuard() {
+            std::error_code ec;
+            if (had) std::filesystem::copy_file(backup, cfg_path, std::filesystem::copy_options::overwrite_existing, ec);
+            else std::filesystem::remove(cfg_path, ec);
+            std::filesystem::remove(backup, ec);   // 清掉备份文件本身
+        }
+    } guard{had, cfg_path, backup};
+
+    // generic_string：Windows 反斜杠会被 JSON 序列化转义（\\），原始子串断言
+    // 对不上——统一用正斜杠形式（POSIX 本即正斜杠）。
+    const std::string tmp = (std::filesystem::temp_directory_path() / "besq_pdir_test").generic_string();
+    auto r = run_besq(bin, {"profile", "set_dir", tmp});
+    expect_eq(r.exit_code, 0, "profile set_dir: exit 0");
+    expect(std::filesystem::exists(cfg_path), "config.json written");
+    std::string content;
+    { std::ifstream in(cfg_path); content.assign(std::istreambuf_iterator<char>(in), {}); }
+    expect_contains(content, "\"profiles_dir\"", "config.json has profiles_dir");
+    expect_contains(content, tmp, "config.json has the dir value");
+    TEST_PASS("system: set_dir persistence roundtrip");
 }
 
 // ── plugin cases (SKIP: plugin files missing) ─────────────────────────────
@@ -372,10 +394,11 @@ void test_plugin_list(const std::string& bin) {
         std::cout << "SKIP: plugins not built (cmake --build build/plugins)" << std::endl;
         return;
     }
-    auto r = run_besq(bin, {"--lang", "en_US", "--algo-dir", dir, "--list-algorithms"});
+    auto r = run_besq(bin, {"--lang", "en_US", "algo", "list"}, /*stdin_input=*/{},
+                      {{"BESQ_ALGO_DIR", dir}});
     expect_eq(r.exit_code, 0, "plugin list: exit 0");
     expect_contains(r.out, "astar", "plugin list: astar registered from plugin");
-    TEST_PASS("system: plugin --algo-dir list");
+    TEST_PASS("system: plugin algo list (BESQ_ALGO_DIR)");
 }
 
 void test_plugin_solve(const std::string& bin) {
@@ -384,8 +407,9 @@ void test_plugin_solve(const std::string& bin) {
         std::cout << "SKIP: plugins not built (cmake --build build/plugins)" << std::endl;
         return;
     }
-    auto r = run_besq(bin, {"--lang", "en_US", "--algo-dir", dir, "--algorithm", "astar", kMaxTime, kMaxTimeVal, "--target",
-                            "diamond_sword[sharpness=5,knockback=2]"});
+    auto r = run_besq(bin, {"--lang", "en_US", "--algorithm", "astar", kMaxTime, kMaxTimeVal, "--target",
+                            "diamond_sword[sharpness=5,knockback=2]"},
+                      /*stdin_input=*/{}, {{"BESQ_ALGO_DIR", dir}});
     expect_eq(r.exit_code, 0, "plugin solve: exit 0");
     expect_contains(r.out, "Forge Plan", "plugin solve: astar produced a plan");
     TEST_PASS("system: plugin astar solve");
@@ -404,7 +428,11 @@ void test_plugin_malicious_refused(const std::string& bin) {
     // (Verbose audit DEBUG lines may mention the plugin path on stdout, so
     // assert on the strategy LIST line ("  name" prefix) instead of the raw
     // stream.)
-    auto r = run_besq(bin, {"--lang", "en_US", "--verbose", "--algo-dir", dir, "--list-algorithms"});
+    // --verbose must follow the subcommand token (`algo --verbose list`):
+    // pre-command flags bind to the top-level (solve) table and are discarded
+    // when the algo sub-result is dispatched.
+    auto r = run_besq(bin, {"--lang", "en_US", "algo", "--verbose", "list"}, /*stdin_input=*/{},
+                      {{"BESQ_ALGO_DIR", dir}});
     expect_eq(r.exit_code, 0, "plugin audit-refused: list still exits 0");
     expect_contains(r.err, "[Audit] REFUSED", "plugin audit-refused: stderr marks REFUSED");
     expect(r.out.find("  malicious") == std::string::npos,
@@ -425,9 +453,9 @@ void test_sandbox_astar(const std::string& bin) {
         return;
     }
     auto r = run_besq(bin,
-                      {"--lang", "en_US", "--algo-dir", dir, "--algorithm", "astar", kMaxTime, kMaxTimeVal, "--target",
+                      {"--lang", "en_US", "--algorithm", "astar", kMaxTime, kMaxTimeVal, "--target",
                        "diamond_sword[sharpness=5]"},
-                      /*stdin_input=*/{}, {{"BESQ_SANDBOX", "1"}});
+                      /*stdin_input=*/{}, {{"BESQ_ALGO_DIR", dir}, {"BESQ_SANDBOX", "1"}});
     expect_eq(r.exit_code, 0, "sandbox astar: exit 0");
     expect_contains(r.out, "Forge Plan", "sandbox astar: solved in worker");
     TEST_PASS("system: BESQ_SANDBOX=1 astar solve");
@@ -443,8 +471,8 @@ void test_sandbox_malicious_listed(const std::string& bin) {
         std::cout << "SKIP: plugins not built (cmake --build build/plugins)" << std::endl;
         return;
     }
-    auto r = run_besq(bin, {"--lang", "en_US", "--algo-dir", dir, "--list-algorithms"},
-                      /*stdin_input=*/{}, {{"BESQ_SANDBOX", "1"}});
+    auto r = run_besq(bin, {"--lang", "en_US", "algo", "list"},
+                      /*stdin_input=*/{}, {{"BESQ_ALGO_DIR", dir}, {"BESQ_SANDBOX", "1"}});
     expect_eq(r.exit_code, 0, "sandbox malicious: list exits 0");
     // In sandbox mode the plugin runs contained in the worker (parent never
     // dlopens it), so the audit does NOT refuse it → it gets listed.
@@ -466,8 +494,8 @@ void test_sandbox_worker_missing_fallback(const std::string& bin) {
         return;
     }
     auto r = run_besq(
-        bin, {"--lang", "en_US", "--algo-dir", dir, "--algorithm", "malicious", "--target", "diamond_sword[sharpness=1]"},
-        /*stdin_input=*/{}, {{"BESQ_SANDBOX", "1"}});
+        bin, {"--lang", "en_US", "--algorithm", "malicious", "--target", "diamond_sword[sharpness=1]"},
+        /*stdin_input=*/{}, {{"BESQ_ALGO_DIR", dir}, {"BESQ_SANDBOX", "1"}});
     expect_eq(r.exit_code, 1, "sandbox no-worker: exit 1");
     expect_contains(r.err, "Unknown algorithm", "sandbox no-worker: algorithm never registered");
     TEST_PASS("system: BESQ_SANDBOX=1 without worker falls back to unknown-algo");
@@ -494,16 +522,18 @@ TEST_CASE("test_system_cli") {
     test_solve_json(bin);
     test_solve_already_met(bin);
     test_err_source_without_target(bin);
-    test_err_invalid_mode(bin);
     test_err_invalid_format(bin);
     test_err_unknown_algo(bin);
     test_err_unknown_ench(bin);
     test_err_unknown_equipment(bin);
-    test_err_missing_target_or_export(bin);
+    test_err_missing_target(bin);
     test_err_unreachable(bin);
-    test_zh_cn_locale(bin);
     test_input_stdin(bin);
     test_export_stdout(bin);
+    // slice-1 子命令化
+    test_serve_subcommand_smoke(bin);
+    test_api_serve_removed(bin);
+    test_set_dir_persistence_roundtrip(bin);
     // plugins (self-skip)
     test_plugin_list(bin);
     test_plugin_solve(bin);

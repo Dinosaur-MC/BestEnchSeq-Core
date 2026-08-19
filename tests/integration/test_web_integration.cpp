@@ -843,7 +843,7 @@ void test_solve_does_not_block_profile() {
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Suite: build the in-process stack mirroring `besq --api serve` (main.cpp),
+// Suite: build the in-process stack mirroring `besq serve` (main.cpp),
 // then drive it with raw sockets. server is declared after module so it is
 // destroyed first (WebModule dtor ordering invariant).
 // ---------------------------------------------------------------------------

@@ -18,7 +18,6 @@ public:
     CLIApp();
     ~CLIApp();
     int run(int argc, char* argv[]);
-    static std::string detect_target(int argc, char* argv[]);
 
     // ── Parser types ──
     struct Config {

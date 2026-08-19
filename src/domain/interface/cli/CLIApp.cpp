@@ -51,14 +51,6 @@ void persist_dir_settings(bool profile, const std::string& dir) {
 
 } // namespace
 
-std::string CLIApp::detect_target(int argc, char* argv[]) {
-    for (int i = 1; i < argc - 1; ++i) {
-        if (std::string_view(argv[i]) == "--api")
-            return argv[i + 1];
-    }
-    return "cli";
-}
-
 CLIApp::CLIApp()
     : _ctx()
 {
