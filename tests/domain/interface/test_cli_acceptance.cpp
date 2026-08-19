@@ -1092,3 +1092,51 @@ TEST_CASE("cli_slice1_unknown_command_fatal") {
     }
     TEST_PASS("unknown_command fatal");
 }
+
+TEST_CASE("cli_slice2a_inspect_parse") {
+    {
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench",
+                              "--filter", "sharp", "--fields", "id,max_level",
+                              "--limit", "5", "--page", "2", "--format", "json"};
+        auto cfg = CLIApp::parse(15, const_cast<char**>(argv));
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::inspect, "inspect action");
+        expect(cfg.profile_target == "builtin:vanilla" && cfg.inspect_kind == "ench", "positionals");
+        expect(cfg.inspect_filter == "sharp" && cfg.inspect_fields == "id,max_level", "options");
+        expect(cfg.inspect_limit == 5 && cfg.inspect_page == 2 && cfg.inspect_format == "json", "options 2");
+    }
+    {   // kind 全拼与大小写
+        const char* argv[] = {"besq", "profile", "inspect", "p", "Enchantments"};
+        auto cfg = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(cfg.inspect_kind == "Enchantments", "full spelling passes through (normalized in run)");
+    }
+    {   // 缺参：parse 成功（Positional 缺失 → 空值），action 已置
+        const char* argv[] = {"besq", "profile", "inspect"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::inspect, "action set with missing positionals");
+        expect(cfg.profile_target.empty(), "missing profile positional -> empty");
+    }
+    TEST_PASS("slice2a inspect parse");
+}
+
+TEST_CASE("cli_slice2a_inspect_behavior") {
+    {   // text 表格：表头 + 行
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench", "--limit", "3"};
+        int rc = CLIApp().run(7, const_cast<char**>(argv));
+        expect(rc == 0, "inspect run exit 0");
+    }
+    {   // json 形态
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench",
+                              "--filter", "sharpness", "--format", "json", "--limit", "2"};
+        int rc = CLIApp().run(11, const_cast<char**>(argv));
+        expect(rc == 0, "inspect json exit 0");
+    }
+    {   // 未知 kind
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "bogus"};
+        expect_throws([&] { CLIApp().run(5, const_cast<char**>(argv)); }, "bad kind throws");
+    }
+    {   // 未知 profile
+        const char* argv[] = {"besq", "profile", "inspect", "nope_nope", "ench"};
+        expect_throws([&] { CLIApp().run(5, const_cast<char**>(argv)); }, "unknown profile throws");
+    }
+    TEST_PASS("slice2a inspect behavior");
+}

@@ -17,10 +17,12 @@
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/orchestration/components/OutputFormatter.h"
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <tuple>
 
 // ============================================================================
 // CLIApp — Application runner
@@ -47,6 +49,34 @@ void persist_dir_settings(bool profile, const std::string& dir) {
         o = Json::object();
     o[profile ? "profiles_dir" : "algo_dir"] = Json(dir);
     AppConfig::save_config_file(o);
+}
+
+/// 对齐列表格渲染（inspect text 形态）：表头 + 分隔行 + 行；列宽自适应。
+/// 数值列右对齐（最后一列起，按列内容全部为整数字符串判定——简化：id/name 类左对齐，
+/// 其余右对齐由调用方传 align 标记）。
+void print_aligned_table(const std::vector<std::string>& headers,
+                         const std::vector<std::vector<std::string>>& rows,
+                         const std::vector<bool>& numeric) {
+    const size_t cols = headers.size();
+    std::vector<size_t> width(cols, 0);
+    for (size_t c = 0; c < cols; ++c) width[c] = headers[c].size();
+    for (const auto& row : rows)
+        for (size_t c = 0; c < cols && c < row.size(); ++c)
+            width[c] = std::max(width[c], row[c].size());
+    auto line = [&](const std::vector<std::string>& cells) {
+        std::string l;
+        for (size_t c = 0; c < cols; ++c) {
+            const std::string cell = c < cells.size() ? cells[c] : "";
+            if (c > 0) l += "  ";
+            if (numeric[c]) l += std::string(width[c] - cell.size(), ' ') + cell;
+            else { l += cell; l += std::string(width[c] - cell.size(), ' '); }
+        }
+        return l;
+    };
+    std::cout << line(headers) << "\n";
+    for (size_t c = 0; c < cols; ++c) { if (c > 0) std::cout << "  "; for (size_t i = 0; i < width[c]; ++i) std::cout << '-'; }
+    std::cout << "\n";
+    for (const auto& row : rows) std::cout << line(row) << "\n";
 }
 
 } // namespace
@@ -371,6 +401,117 @@ int CLIApp::run_profile(const Config& config) {
             flush_output();
             return 0;
         }
+        case Config::ProfileAction::inspect: {
+            if (config.inspect_format != "text" && config.inspect_format != "json")
+                throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.inspect_format));
+            // kind 规范化（Global Constraint c）
+            std::string kind;
+            {
+                std::string k = config.inspect_kind;
+                for (auto& c : k) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (k == "equip" || k == "equipments" || k == "equipment") kind = "equip";
+                else if (k == "ench" || k == "enchantments" || k == "enchantment") kind = "ench";
+                else if (k == "tags") kind = "tags";
+                else throw std::runtime_error(tr_fmt("cli.err.invalid_inspect_kind", config.inspect_kind));
+            }
+            _ctx.load_profiles();
+            if (!_ctx.profile_exists(config.profile_target))
+                throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.profile_target));
+            const Profile& p = _ctx.profile(config.profile_target);
+            // ── 收集行（filter → fields → 分页；count = 过滤后分页前）──
+            std::vector<std::string> headers;
+            std::vector<std::vector<std::string>> rows;
+            std::vector<bool> numeric;
+            auto contains = [](const std::string& hay, const std::string& needle) {
+                if (needle.empty()) return true;
+                auto h = hay; auto n = needle;
+                for (auto& c : h) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                for (auto& c : n) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                return h.find(n) != std::string::npos;
+            };
+            auto pick_fields = [&](const std::vector<std::string>& all,
+                                   const std::vector<std::string>& all_headers,
+                                   const std::vector<bool>& all_numeric) {
+                // fields 空 → 全列；否则按逗号选择（未知列报错）
+                std::vector<std::string> want;
+                if (config.inspect_fields.empty()) want = all_headers;
+                else for (const auto& f : string_utils::split(config.inspect_fields, ','))
+                    want.push_back(string_utils::trim(f));
+                for (const auto& w : want)
+                    if (std::find(all_headers.begin(), all_headers.end(), w) == all_headers.end())
+                        throw std::runtime_error(tr_fmt("cli.err.invalid_inspect_field", w,
+                            string_utils::join(all_headers, ", ")));
+                std::vector<std::string> hs, cells;
+                std::vector<bool> nums;
+                for (size_t i = 0; i < all_headers.size(); ++i)
+                    if (std::find(want.begin(), want.end(), all_headers[i]) != want.end()) {
+                        hs.push_back(all_headers[i]); cells.push_back(all[i]); nums.push_back(all_numeric[i]);
+                    }
+                return std::make_tuple(hs, cells, nums);
+            };
+            auto str = [](const NSID& id) { return id.str(); };
+            if (kind == "ench") {
+                headers = {"id", "name", "max_level", "limited_level", "multiplier", "is_treasure"};
+                numeric = {false, false, true, true, true, false};
+                for (const auto& e : p.ench()) {
+                    if (!contains(e.id.str(), config.inspect_filter)
+                        && !contains(e.name, config.inspect_filter)) continue;
+                    std::vector<std::string> all = {str(e.id), e.name,
+                        std::to_string(e.max_level), std::to_string(e.limited_level),
+                        std::to_string(e.multiplier), e.is_treasure ? "true" : "false"};
+                    auto [hs, cells, nums] = pick_fields(all, headers, numeric);
+                    rows.push_back(cells); headers = hs; numeric = nums;
+                }
+            } else if (kind == "equip") {
+                headers = {"id", "name", "category", "max_durability"};
+                numeric = {false, false, false, true};
+                for (const auto& e : p.eq()) {
+                    if (!contains(e.id.str(), config.inspect_filter)
+                        && !contains(e.name, config.inspect_filter)) continue;
+                    std::vector<std::string> all = {str(e.id), e.name, str(e.category),
+                        std::to_string(e.max_durability)};
+                    auto [hs, cells, nums] = pick_fields(all, headers, numeric);
+                    rows.push_back(cells); headers = hs; numeric = nums;
+                }
+            } else {
+                headers = {"id", "name"};
+                numeric = {false, false};
+                for (const auto& t : p.tags()) {
+                    if (!contains(t.id.str(), config.inspect_filter)) continue;
+                    std::vector<std::string> all = {str(t.id), t.name};
+                    auto [hs, cells, nums] = pick_fields(all, headers, numeric);
+                    rows.push_back(cells); headers = hs; numeric = nums;
+                }
+            }
+            const size_t total = rows.size();
+            if (config.inspect_limit > 0) {
+                const size_t page = config.inspect_page > 0 ? static_cast<size_t>(config.inspect_page) : 1;
+                const size_t start = (page - 1) * static_cast<size_t>(config.inspect_limit);
+                std::vector<std::vector<std::string>> page_rows;
+                for (size_t i = start; i < rows.size() && page_rows.size() < static_cast<size_t>(config.inspect_limit); ++i)
+                    page_rows.push_back(std::move(rows[i]));
+                rows = std::move(page_rows);
+            }
+            if (config.inspect_format == "json") {
+                Json o = Json::object();
+                o["kind"] = Json(kind);
+                o["count"] = Json(static_cast<int64_t>(total));
+                Json arr = Json::array();
+                for (const auto& row : rows) {
+                    Json r = Json::object();
+                    for (size_t c = 0; c < headers.size() && c < row.size(); ++c)
+                        r[headers[c]] = numeric[c] ? Json(std::stoll(row[c])) : Json(row[c]);
+                    arr.push_back(std::move(r));
+                }
+                o["rows"] = std::move(arr);
+                std::cout << o.to_string() << "\n";
+            } else {
+                std::cout << tr_fmt("cli.msg.inspect_count", rows.size(), total) << "\n";
+                print_aligned_table(headers, rows, numeric);
+            }
+            flush_output();
+            return 0;
+        }
         default:
             // 无动作（如 `besq profile` 裸命令）不再静默成功——按解析失败处理
             throw std::runtime_error(tr("cli.err.parse_failed"));
@@ -475,6 +616,18 @@ const auto PROFILE_OPTS = OptionTable{
             Option<std::string>{.long_name = "version", .help_key = "cli.help.publish_version_desc"},
             Option<std::string>{.long_name = "tag",     .help_key = "cli.help.publish_tag_desc"},
         }},
+    Command<Positional<std::string>, Positional<std::string>,
+            Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>{
+        .name = "inspect", .help_key = "cli.cmd.inspect_desc",
+        .table = OptionTable{
+            Positional<std::string>{.name = "profile", .help_key = "cli.help.profile_desc"},
+            Positional<std::string>{.name = "kind",    .help_key = "cli.cmd.inspect_kind_desc"},
+            Option<std::string>{.long_name = "filter", .help_key = "cli.help.filter_desc"},
+            Option<std::string>{.long_name = "fields", .help_key = "cli.help.fields_desc"},
+            Option<int>{.long_name = "limit", .help_key = "cli.help.limit_desc", .default_v = 0},
+            Option<int>{.long_name = "page",  .help_key = "cli.help.page_desc",  .default_v = 1},
+            Option<std::string>{.long_name = "format", .help_key = "cli.help.format_desc", .default_v = std::string("text")},
+        }},
 };
 
 // ── solve 命令表 = 顶层表的前 20 项（全局三项 + list-langs + lang + 16 solve 选项）──
@@ -528,7 +681,7 @@ const auto BESQ_OPTIONS = OptionTable{
         .name = "solve", .alias = "calc", .help_key = "cli.cmd.solve_desc",
         .table = SOLVE_CMD_OPTS,
     },
-    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>>{
+    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>, Positional<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>>{
         .name = "profile", .help_key = "cli.cmd.profile_desc", .table = PROFILE_OPTS,
     },
     Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>>{
@@ -784,6 +937,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
     }
 
     Config cfg = dispatch();
+    cfg.command_path = result.command_path;
     if (cfg.help || cfg.version)
         return cfg;
 

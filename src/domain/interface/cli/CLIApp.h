@@ -6,6 +6,8 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
+#include <vector>
 
 // ============================================================================
 // CLIApp — Full CLI Application
@@ -22,7 +24,7 @@ public:
     // ── Parser types ──
     struct Config {
         enum class Cmd { solve, profile, algo, serve };
-        enum class ProfileAction { none, list, set_dir, import, export_, info, publish };
+        enum class ProfileAction { none, list, set_dir, import, export_, info, publish, inspect };
         enum class AlgoAction { none, list, set_dir };
 
         Cmd cmd = Cmd::solve;
@@ -64,6 +66,13 @@ public:
         std::string export_format = "json";
         std::string publish_version;     // publish --version（顶层不再有对应选项）
         std::string publish_tag;         // publish --tag（顶层不再有对应选项）
+        std::string inspect_kind;              // profile inspect 第二位置参数（run 层规范化）
+        std::string inspect_filter;
+        std::string inspect_fields;
+        int inspect_limit = 0;                 // 0 = 全部
+        int inspect_page  = 1;
+        std::string inspect_format = "text";
+        std::vector<std::string_view> command_path;   // Task 6 用；本任务先填充
         // algo 动作
         AlgoAction algo_action = AlgoAction::none;
         std::string algo_target;         // set_dir <dir>
@@ -161,6 +170,15 @@ private:
             cfg.profile_target = std::get<0>(p.value).value_or(Config{}.profile_target);
             cfg.publish_version = std::get<1>(p.value).value_or(Config{}.publish_version);
             cfg.publish_tag     = std::get<2>(p.value).value_or(Config{}.publish_tag); }
+        else if (std::get<9>(v).has_value()) {                cfg.profile_action = Config::ProfileAction::inspect;
+            const auto& i = *std::get<9>(v);
+            cfg.profile_target = std::get<0>(i.value).value_or(Config{}.profile_target);
+            cfg.inspect_kind   = std::get<1>(i.value).value_or(Config{}.inspect_kind);
+            cfg.inspect_filter = std::get<2>(i.value).value_or(Config{}.inspect_filter);
+            cfg.inspect_fields = std::get<3>(i.value).value_or(Config{}.inspect_fields);
+            cfg.inspect_limit  = std::get<4>(i.value).value_or(Config{}.inspect_limit);
+            cfg.inspect_page   = std::get<5>(i.value).value_or(Config{}.inspect_page);
+            cfg.inspect_format = std::get<6>(i.value).value_or(Config{}.inspect_format); }
         return cfg;
     }
 
