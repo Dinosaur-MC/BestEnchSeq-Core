@@ -18,4 +18,5 @@ besq_test(test_parser_detail test_parser_detail.cpp)
 besq_test(test_parsers test_parsers.cpp)
 besq_test(test_limited_level_calculator test_limited_level_calculator.cpp)
 besq_test(test_business_schemas test_business_schemas.cpp)
+besq_test(test_sql_parser sql/test_sql_parser.cpp)
 
