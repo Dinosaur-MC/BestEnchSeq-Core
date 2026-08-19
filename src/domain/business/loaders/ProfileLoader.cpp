@@ -1,10 +1,10 @@
 #include "ProfileLoader.h"
 #include "BuiltinData.h"
-#include "domain/business/components/ItemProperties.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/ItemProperties.h"
 #include "domain/business/components/LimitedLevelCalculator.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/parsers/McOfficialParser.h"
@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // ============================================================================
@@ -41,6 +42,15 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // — the profile key falls back to the file stem, the rest stays empty.)
         std::vector<std::string> dependencies;
         std::string json_name, json_description, json_author, json_version, json_mc_version, json_display_name, json_parent;
+        // Phase 1c: the profile's OWN tags (native JSON `tags` object in the
+        // flat loader format `"<ns>:<path>": [values]` — same shape as
+        // vanilla.json).  They seed the cross-validation universe (like
+        // datapack item tags) AND land in the profile's tag registry +
+        // resolver, so a SAVE'd profile's tag rows (incl. values) survive the
+        // load_directory round-trip (SQL slice-1 Task 4 — `Profile::to_json`
+        // does not serialize resolver values; SAVE composes this object).
+        TagRegistry file_tags;
+        std::unordered_map<std::string, std::vector<std::string>> file_tag_values;
         const auto format = FormatDetector::detect(path);
         if (format == DataFormat::NativeJson || format == DataFormat::Unknown) {
             auto root = Json::parse(file_utils::read_file(path));
@@ -63,6 +73,26 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
                         dependencies.push_back(e.as<std::string>());
                 }
             }
+            if (root.has(std::string(ProfileMetadata::KEY_TAGS))) {
+                Json tv = root[std::string(ProfileMetadata::KEY_TAGS)];
+                if (tv.type() == JsonType::Object) {
+                    for (const auto& [key, val] : tv.as_object()) {
+                        if (val.type() != JsonType::Array)
+                            continue;
+                        std::vector<std::string> values;
+                        for (const auto& elem : val.as_array())
+                            if (elem.type() == JsonType::String)
+                                values.push_back(elem.as<std::string>());
+                        try {
+                            file_tags.insert({NSID("#" + key), key});
+                        } catch (const std::exception&) {
+                            LOG_WARN("Skipping profile tag with invalid key '%s'", key.c_str());
+                            continue;
+                        }
+                        file_tag_values[key] = std::move(values);
+                    }
+                }
+            }
         }
 
         // Phase 2: two-phase loading — build the vanilla universe into
@@ -78,7 +108,9 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // FormatDetector::Result carries item_tags for the McOfficial branch;
         // native JSON/CSV have none, so this is a no-op for them (B-T24 #24).
         auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
-        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data, item_tags.empty() ? nullptr : &datapack_tags);
+        for (const auto& [id, tag] : file_tags.data())
+            datapack_tags.insert(tag); // 文件自身 tags 并入校验宇宙（重复 id 保持原样）
+        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data, datapack_tags.empty() ? nullptr : &datapack_tags);
 
         // Compute limited_level uniformly (B-T18): the profile's own registry,
         // using the attached vanilla-universe resolver, BEFORE the profile is
@@ -87,6 +119,8 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // `#mypack:*` / `tags_of` applicability holds at solve time.
         auto resolver = besq::data::make_builtin_tag_resolver();
         McOfficialParser::load_item_tags_into(*resolver, item_tags);
+        for (const auto& [key, values] : file_tag_values)
+            resolver->add_tag(key, std::unordered_set<std::string>(values.begin(), values.end()));
         LimitedLevelCalculator::compute(own.ench, *resolver, load_item_properties());
 
         // Construct Profile via full-parameter constructor.  The profile KEY is
