@@ -500,7 +500,7 @@ int CLIApp::run_profile(const Config& config) {
                 for (const auto& row : rows) {
                     Json r = Json::object();
                     for (size_t c = 0; c < headers.size() && c < row.size(); ++c)
-                        r[headers[c]] = numeric[c] ? Json(std::stoll(row[c])) : Json(row[c]);
+                        r[headers[c]] = numeric[c] ? Json(static_cast<int64_t>(std::stoll(row[c]))) : Json(row[c]);
                     arr.push_back(std::move(r));
                 }
                 o["rows"] = std::move(arr);
