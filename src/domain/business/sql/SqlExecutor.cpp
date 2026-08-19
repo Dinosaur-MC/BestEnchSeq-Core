@@ -657,6 +657,13 @@ SqlResult SqlExecutor::exec_insert(const InsertStmt& s) {
             r.message = "enchantment '" + e.id.str() + "' already exists";
             return r;
         }
+        // 适用性必填：空 supported_items 的魔咒 loader 回读会被丢弃
+        // （RegistryLoader::from_dto no-applicable→remove 不变量），持久化有损，
+        // 故 INSERT 直接拒绝（与 loader 校验宇宙语义一致）。
+        if (e.supported_items.empty()) {
+            r.message = "enchantment requires supported_items (applicability)";
+            return r;
+        }
         const std::string fk = check_ench_refs(*prof, e);
         if (!fk.empty()) {
             r.message = "FK violation: " + fk;
@@ -778,6 +785,11 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
             for (const auto& [c, v] : s.sets)
                 if (!set_field_enchantment(c, v, patch, r.message))
                     return r;
+            if (touch_sup && patch.supported_items.empty()) {
+                // 适用性必填（同 INSERT）：清空 supported_items 的魔咒回读即丢。
+                r.message = "enchantment requires supported_items (applicability)";
+                return r;
+            }
             if (touch_excl || touch_sup) {
                 const std::string fk = check_ench_refs(*prof, patch, touch_excl, touch_sup);
                 if (!fk.empty())

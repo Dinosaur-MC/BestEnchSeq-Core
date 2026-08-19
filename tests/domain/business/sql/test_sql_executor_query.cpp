@@ -205,7 +205,7 @@ TEST_CASE("sql_write_statements_deferred") {
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
-    auto stmts = SqlParser{}.parse("INSERT INTO enchantment (id, name) VALUES ('a:b','AB');"
+    auto stmts = SqlParser{}.parse("INSERT INTO enchantment (id, name, supported_items) VALUES ('a:b','AB','#minecraft:swords');"
                                    "UPDATE equipment SET max_durability=1 WHERE id='x';"
                                    "DELETE FROM tags WHERE id='#x:y';"
                                    "STATUS;"
