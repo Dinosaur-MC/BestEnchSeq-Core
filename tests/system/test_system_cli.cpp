@@ -610,3 +610,47 @@ TEST_CASE("system: datapack export e2e") {
     expect(std::filesystem::exists(tmp + "/data"), "data dir exists");
     TEST_PASS("system: datapack export");
 }
+
+// ── slice-1 profile sql 系统 e2e（真实 CLI 端到端）──────────────────────
+//
+// 链式执行 + json 数组输出；INSERT → SAVE 写盘 → 新进程 SELECT 见新行
+// （跨进程持久化门：SAVE 文件名消毒 `:`→`_`（Task 4），回读靠文件内 name
+// 字段恢复 profile；bare enchantment INSERT 不受 FK 严格检查约束）。
+
+TEST_CASE("system: profile sql chain") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    auto r = run_besq(bin, {"profile", "sql", "SELECT id FROM enchantment LIMIT 2"});
+    expect_eq(r.exit_code, 0, "sql chain: exit 0");
+    expect_contains(r.out, "id", "sql chain: header");
+    auto rj = run_besq(bin, {"profile", "sql", "--format", "json", "SELECT id FROM enchantment LIMIT 1"});
+    expect_eq(rj.exit_code, 0, "sql json: exit 0");
+    expect_contains(rj.out, "[", "sql json: array");
+    TEST_PASS("system: profile sql");
+}
+
+TEST_CASE("system: profile sql save roundtrip") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // temp profiles dir：INSERT → SAVE 写盘 → 新进程 SELECT 见新行（持久化回读门）
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string env_ns = "test";
+    auto r1 = run_besq(bin,
+        {"profile", "sql",
+         "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES ('" + env_ns + ":sqlmark','SQLMark',1,1,'#minecraft:swords'); SAVE"},
+        {}, {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r1.exit_code, 0, "sql insert+save: exit 0");
+    auto r2 = run_besq(bin, {"profile", "sql", "SELECT id FROM enchantment WHERE id='" + env_ns + ":sqlmark'"},
+                       {}, {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r2.exit_code, 0, "sql reload select: exit 0");
+    expect_contains(r2.out, env_ns + ":sqlmark", "saved row visible after reload");
+    TEST_PASS("system: profile sql save roundtrip");
+}
