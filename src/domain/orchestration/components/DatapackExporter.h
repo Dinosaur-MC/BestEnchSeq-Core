@@ -12,6 +12,7 @@ namespace orchestration {
 class DatapackExporter {
 public:
     /// 成功返回 true；失败返回 false 并填 error（目标已存在且非空 / 不可写 / IO 错误）。
+    /// 注意：写入中途失败会留下部分目录树（best-effort，不清理）；重试前需先删除残留。
     static bool export_profile(const Profile& profile,
                                const std::filesystem::path& dir,
                                std::string& error);
