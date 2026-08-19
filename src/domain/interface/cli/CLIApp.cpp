@@ -17,6 +17,7 @@
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/orchestration/components/OutputFormatter.h"
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -37,6 +38,30 @@ std::vector<std::string> split_profile_members(const std::string& value) {
             members.push_back(std::move(m));
     }
     return members;
+}
+
+/// set_dir 持久化：read-modify-write config.json（保留未知字段；best-effort）。
+/// Task 7 完善 AppConfig 字段读取；此处实现已完整。
+void persist_dir_settings(bool profile, const std::string& dir) {
+    Json o = AppConfig::load_config_file();
+    if (!o.is_valid() || o.type() != JsonType::Object)
+        o = Json::object();
+    o[profile ? "profiles_dir" : "algo_dir"] = Json(dir);
+    AppConfig::save_config_file(o);
+}
+
+/// 读取持久化的 profiles_dir：BESQ_PROFILES_DIR env > config.json "profiles_dir"（set_dir 写入）。
+/// Task 7 将把该读取迁入 AppConfig::profiles_dir 字段；此处先读同一数据源（env + config.json）。
+std::string persisted_profiles_dir() {
+    const std::string env_dir = get_env_str("BESQ_PROFILES_DIR");
+    if (!env_dir.empty())
+        return env_dir;
+    Json o = AppConfig::load_config_file();
+    if (!o.is_valid() || o.type() != JsonType::Object)
+        return {};
+    if (!o.has("profiles_dir") || o["profiles_dir"].type() != JsonType::String)
+        return {};
+    return o["profiles_dir"].as<std::string>();
 }
 
 } // namespace
@@ -161,10 +186,12 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
-    // Slice 1: profile/algo/serve subcommands parse + validate only — their
-    // execution lands in Task 5 (run_profile / run_algo / serve dispatch).
-    if (config.cmd != Config::Cmd::solve)
-        return 0;
+    // ── 子命令分派 ──
+    switch (config.cmd) {
+        case Config::Cmd::profile: return run_profile(config);
+        case Config::Cmd::algo:    return run_algo(config);
+        default: break;   // solve
+    }
 
     // 1b. --list-langs: language-only listing — NO domain auto-load (which
     //     would parse profiles/plugins and surface unrelated warnings, e.g.
@@ -208,6 +235,12 @@ int CLIApp::run(int argc, char* argv[]) {
     //    auto_load() (step 2) already scanned `<exe_dir>/profiles` (safe
     //    no-op when missing).  activate_profile must run before any
     //    inventory solve so the task's enchantments resolve correctly.
+    //    Profile 目录：持久化 profiles_dir（set_dir / BESQ_PROFILES_DIR）> 默认
+    {
+        const std::string pdir = persisted_profiles_dir();
+        if (!pdir.empty())
+            _ctx.set_profiles_dir(pdir);
+    }
     _ctx.load_profiles();
     if (config.profile) {
         auto members = split_profile_members(*config.profile);
@@ -262,6 +295,135 @@ int CLIApp::run(int argc, char* argv[]) {
     }
 
     return 0;
+}
+
+// ============================================================================
+// profile / algo 子命令处理器
+// ============================================================================
+
+int CLIApp::run_profile(const Config& config) {
+    // set_dir 持久化的目录优先于默认
+    const std::string pdir = persisted_profiles_dir();
+    if (!pdir.empty())
+        _ctx.set_profiles_dir(pdir);
+
+    switch (config.profile_action) {
+        case Config::ProfileAction::list: {
+            _ctx.load_profiles();
+            auto profiles = _ctx.list_profiles();
+            std::cout << tr_fmt("cli.msg.list_profiles", profiles.size()) << "\n";
+            for (const auto& p : profiles)
+                std::cout << "  " << p << "\n";
+            flush_output();
+            return 0;
+        }
+        case Config::ProfileAction::set_dir: {
+            if (config.profile_target.empty())
+                throw std::runtime_error(tr("cli.err.empty_dir"));
+            persist_dir_settings(true, config.profile_target);
+            _ctx.set_profiles_dir(config.profile_target);
+            std::cout << tr_fmt("cli.msg.dir_set", config.profile_target) << "\n";
+            flush_output();
+            return 0;
+        }
+        case Config::ProfileAction::import: {
+            if (_ctx.composite_active())
+                throw std::runtime_error(tr("cli.err.composite_readonly"));
+            _ctx.load_profiles();
+            _ctx.import_profile(config.profile_target);
+            flush_output();
+            return 0;
+        }
+        case Config::ProfileAction::export_: {
+            if (config.export_format != "json" && config.export_format != "csv")
+                throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.export_format));
+            _ctx.load_profiles();
+            if (!config.export_profile.empty()) {
+                if (!_ctx.profile_exists(config.export_profile))
+                    throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.export_profile));
+                _ctx.activate_profile(config.export_profile);
+            }
+            if (config.export_format == "json") {
+                std::string json = _ctx.export_profile_to_string();
+                if (config.export_file.empty() || config.export_file == "-") {
+                    std::cout << json << "\n";
+                    flush_output();
+                } else {
+                    std::ofstream out(config.export_file);
+                    if (!out) throw std::runtime_error(
+                        tr_fmt("main.err.export_failed", config.export_file));
+                    out << json;
+                    flush_output();
+                }
+            } else {   // csv：extension-driven（现有 export_profile）
+                if (config.export_file.empty() || config.export_file == "-")
+                    throw std::runtime_error(tr_fmt("cli.err.invalid_value", "-"));
+                bool ok = _ctx.export_profile(config.export_file);
+                if (!ok) throw std::runtime_error(
+                    tr_fmt("main.err.export_failed", config.export_file));
+                flush_output();
+            }
+            return 0;
+        }
+        case Config::ProfileAction::info: {
+            _ctx.load_profiles();
+            if (!_ctx.profile_exists(config.profile_target))
+                throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.profile_target));
+            ProfileMeta meta = _ctx.profile_metadata(config.profile_target);
+            std::cout << meta.name << "\n";
+            if (!meta.description.empty()) std::cout << "  " << meta.description << "\n";
+            std::cout << "  version: " << (meta.version.empty() ? std::string("-") : meta.version) << "\n";
+            std::cout << "  mc_version: " << (meta.mc_version.empty() ? std::string("-") : meta.mc_version) << "\n";
+            if (!meta.release_tag.empty()) std::cout << "  tag: " << meta.release_tag << "\n";
+            std::cout << "  enchantments: " << meta.ench_count
+                      << "  equipment: " << meta.eq_count
+                      << "  tags: " << meta.tag_count << "\n";
+            flush_output();
+            return 0;
+        }
+        case Config::ProfileAction::publish: {
+            if (config.profile_target.empty())
+                throw std::runtime_error(tr_fmt("cli.err.profile_not_found", ""));
+            std::string version = config.publish_version.empty() ? "dev" : config.publish_version;
+            std::string tag     = config.publish_tag;
+            std::string out     = config.profile_target + ".json";
+            bool ok = _ctx.publish_profile(config.profile_target, version, tag, out);
+            if (!ok)
+                throw std::runtime_error(tr_fmt("main.err.publish_failed", config.profile_target));
+            LOG_INFO("%s", tr_fmt("main.msg.published", out).c_str());
+            flush_output();
+            return 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+int CLIApp::run_algo(const Config& config) {
+    switch (config.algo_action) {
+        case Config::AlgoAction::list: {
+            const std::string algo_dir = AppConfig::get().algo_dir;
+            if (std::filesystem::is_directory(algo_dir))
+                _ctx.load_algorithms(algo_dir);
+            auto algos = _ctx.list_algorithms();
+            std::cout << tr_fmt("cli.msg.list_algorithms", algos.size()) << "\n";
+            for (const auto& name : algos)
+                std::cout << "  " << name << "\n";
+            flush_output();
+            return 0;
+        }
+        case Config::AlgoAction::set_dir: {
+            if (config.algo_target.empty())
+                throw std::runtime_error(tr("cli.err.empty_dir"));
+            AppConfig::get().algo_dir = config.algo_target;
+            persist_dir_settings(false, config.algo_target);
+            std::cout << tr_fmt("cli.msg.dir_set", config.algo_target) << "\n";
+            flush_output();
+            return 0;
+        }
+        default:
+            return 0;
+    }
 }
 
 // ============================================================================
@@ -446,11 +608,11 @@ struct CLIApp::UserI18nTranslator {
 std::string CLIApp::help_text(std::string_view program_name) {
     std::string r = cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
 
-    // Examples
+    // Examples（顶层帮助专属）
     r += "\nExamples:\n";
     r += "  " + std::string(program_name) + " --target diamond_sword[sharpness=5,knockback=2]\n";
     r += "  " + std::string(program_name) + " --source \"protection=4\" --target diamond_chestplate[protection=5,unbreaking=3]\n";
-    r += "  " + std::string(program_name) + " --export out.json\n\n";
+    r += "  " + std::string(program_name) + " profile export --file out.json\n\n";
 
     // Enchantment format reference
     r += tr("cli.help.ench_format_header") + "\n";
@@ -459,6 +621,13 @@ std::string CLIApp::help_text(std::string_view program_name) {
     r += "  " + tr("cli.help.ench_format_colon") + "\n";
 
     return r;
+}
+
+std::string CLIApp::help_text(std::string_view program_name,
+                              std::span<const std::string_view> command_path) {
+    if (command_path.empty())
+        return help_text(program_name);
+    return cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name, command_path);
 }
 
 // ============================================================================

@@ -19,7 +19,9 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <variant>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Helper: RAII guard writing inventory JSON to a unique temp file; the file is
@@ -851,7 +853,9 @@ TEST_CASE("test_help_text") {
     auto text = CLIApp::help_text();
     expect(text.find("Usage:") != std::string::npos, "help_text has Usage header");
     expect(text.find("--target") != std::string::npos, "help_text lists --target");
-    expect(text.find("--export") != std::string::npos, "help_text lists --export");
+    // NOTE (slice 1): 顶层 --export 选项已迁至 `profile export`——示例行改为
+    // `profile export --file out.json`（Task 8 迁移本用例的断言清单已含此改动）。
+    expect(text.find("profile export") != std::string::npos, "help_text lists profile export example");
     expect(text.find("--list-algorithms") != std::string::npos, "help_text lists --list-algorithms");
     expect(text.find("--profile") != std::string::npos, "help_text lists --profile");
 
@@ -985,4 +989,47 @@ TEST_CASE("cli_slice1_mode_inference") {
                       "--input + --source rejected (inventory_rejects_source)");
     }
     TEST_PASS("mode inference");
+}
+
+TEST_CASE("cli_slice1_profile_handlers") {
+    {   // profile list
+        const char* argv[] = {"besq", "profile", "list"};
+        int rc = CLIApp().run(3, const_cast<char**>(argv));
+        expect(rc == 0, "profile list exit 0");
+    }
+    {   // profile info 存在
+        const char* argv[] = {"besq", "profile", "info", "builtin:vanilla"};
+        int rc = CLIApp().run(4, const_cast<char**>(argv));
+        expect(rc == 0, "profile info exit 0");
+    }
+    {   // profile info 不存在
+        const char* argv[] = {"besq", "profile", "info", "nope_nope"};
+        expect_throws([&] { CLIApp().run(4, const_cast<char**>(argv)); },
+                      "profile info unknown -> throws");
+    }
+    {   // profile export 到 stdout（json）
+        const char* argv[] = {"besq", "profile", "export", "--profile", "builtin:vanilla", "--file", "-"};
+        // run() 会向 stdout 打印 JSON——测试不捕获 stdout，仅验证不抛
+        int rc = CLIApp().run(7, const_cast<char**>(argv));
+        expect(rc == 0, "profile export stdout exit 0");
+    }
+    TEST_PASS("profile handlers");
+}
+
+TEST_CASE("cli_slice1_algo_handlers") {
+    const char* argv[] = {"besq", "algo", "list"};
+    int rc = CLIApp().run(3, const_cast<char**>(argv));
+    expect(rc == 0, "algo list exit 0");
+    TEST_PASS("algo handlers");
+}
+
+TEST_CASE("cli_slice1_help_text") {
+    std::string top = CLIApp::help_text("besq");
+    expect(top.find("solve (calc)") != std::string::npos, "help lists solve (calc)");
+    expect(top.find("profile") != std::string::npos && top.find("serve") != std::string::npos,
+           "help lists profile/serve");
+    std::string sv = CLIApp::help_text("besq", std::vector<std::string_view>{"serve"});
+    expect(sv.find("--port") != std::string::npos, "serve help lists --port");
+    expect(sv.find("--target") == std::string::npos, "serve help has no solve options");
+    TEST_PASS("slice1 help_text");
 }
