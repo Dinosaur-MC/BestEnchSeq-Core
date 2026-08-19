@@ -114,7 +114,7 @@ std::string client_addr(const HttpRequest& req);
 
 ```cpp
 struct RateLimitConfig {
-    bool enabled = false;            // 默认关闭：现有行为零变化，HTTP 服务（--api serve）显式开启
+    bool enabled = false;            // 默认关闭：现有行为零变化，HTTP 服务（besq serve）显式开启
     double ip_rps = 20;              // 每 IP 补令牌速率（次/秒）
     size_t ip_burst = 40;
     double global_rps = 200;

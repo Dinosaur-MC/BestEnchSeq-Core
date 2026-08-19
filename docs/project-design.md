@@ -314,7 +314,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 纯翻译层，无业务逻辑。
 
 - `BesqContext`：应用会话外观，持有 ProfileManager 和 AlgorithmLoader，委托所有操作到 orchestration pipeline
-- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--edit` 解析内联在 CLIApp 中
+- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--edit`（切片 2 交互立项）解析内联在 CLIApp 中
 - **components/**：`ParserShared`（接口层共享解析助手）+ 可复用 `http/` 框架（`HttpServer`/`Router`/`Connection`/SSE，独立库 `besq-http`）
 - **abi/**：`CAbiBindings`（C ABI 包装，JSON 交换）
 - **web/**：`WebModule`（8 控制器：Health/Status/Settings/Profiles/Algorithm/Calculator/Fs/Logs，`_ctx_gate` 串行化）+ `WebSolveService`（worker 线程 + `SseHub` SSE 推送，最后一帧重放）
