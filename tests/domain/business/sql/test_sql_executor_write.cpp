@@ -150,12 +150,31 @@ TEST_CASE("sql_write_update_reference_validation") {
     auto chk2 = run(ex, "SELECT exclusive_set FROM enchantment WHERE id='minecraft:sharpness';");
     expect(chk2.rows[0][0] == "minecraft:bane_of_arthropods", "unchanged on rejection");
 
+    // 良性 enchantment UPDATE：不改引用列，不得触发 FK
+    auto ben_e = run(ex, "UPDATE enchantment SET max_level=4 WHERE id='minecraft:sharpness';");
+    expect(ben_e.affected == 1 && ben_e.message.find("FK") == std::string::npos, "benign enchantment UPDATE ok");
+
+    // 良性 equipment UPDATE：不改 category，不得触发 FK
+    // （展示类目 #minecraft:sword 非注册 tag——delta-only 校验只查 SET 触碰列）
+    auto ben_eq = run(ex, "UPDATE equipment SET max_durability=500 WHERE id='minecraft:diamond_sword';");
+    expect(ben_eq.message.find("FK") == std::string::npos, "benign equipment UPDATE ok");
+    expect(ben_eq.affected == 1, "benign affected 1");
+    auto ben_eq_chk = run(ex, "SELECT max_durability FROM equipment WHERE id='minecraft:diamond_sword';");
+    expect(ben_eq_chk.rows[0][0] == "500", "max_durability updated");
+
+    // equipment.category 改为已注册 tag → 成功
+    auto cat_ok = run(ex, "UPDATE equipment SET category='#minecraft:swords' WHERE id='minecraft:diamond_sword';");
+    expect(cat_ok.affected == 1, "category to registered tag ok");
+    expect(cat_ok.message.find("FK") == std::string::npos, "no FK error on registered tag");
+    auto cat_chk = run(ex, "SELECT category FROM equipment WHERE id='minecraft:diamond_sword';");
+    expect(cat_chk.rows[0][0] == "#minecraft:swords", "category updated");
+
     // equipment.category 悬空 → 拒绝，原值保留
     auto bad_eq = run(ex, "UPDATE equipment SET category='#minecraft:no_such_tag' WHERE id='minecraft:diamond_sword';");
     expect(bad_eq.affected == 0, "dangling equipment category rejected");
     expect(bad_eq.message.find("#minecraft:no_such_tag") != std::string::npos, "lists missing category tag");
     auto eq_chk = run(ex, "SELECT category FROM equipment WHERE id='minecraft:diamond_sword';");
-    expect(eq_chk.rows[0][0] == "#minecraft:sword", "category unchanged");
+    expect(eq_chk.rows[0][0] == "#minecraft:swords", "category unchanged on rejection");
 
     // tags.values 悬空 → 拒绝，原值保留
     auto bad_tag = run(ex, "UPDATE tags SET values='#minecraft:no_such_tag' WHERE id='#minecraft:enchantment/curse';");

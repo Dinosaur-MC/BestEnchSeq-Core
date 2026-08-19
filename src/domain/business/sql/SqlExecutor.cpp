@@ -412,15 +412,22 @@ bool set_field_tags(
 }
 
 // ── FK 严格校验：INSERT/UPDATE 引用存在性（列出全部缺失） ─────────────
+//
+// UPDATE 用 delta-only 校验：只校验 SET 触碰的引用列。既有行（尤其
+// loader 注入的展示类目 equipment.category，如 `#minecraft:sword` 非注册
+// tag）未改动的列不得重校验——否则良性 UPDATE 会被误拒（C1）。
 
-std::string check_ench_refs(const Profile& p, const EnchInfo& e) {
+std::string check_ench_refs(const Profile& p, const EnchInfo& e, bool check_exclusive = true,
+                            bool check_supported = true) {
     std::vector<std::string> missing;
-    for (const auto& id : e.exclusive_set)
-        if (!p.ench().contains(id))
-            missing.push_back("exclusive_set->" + id.str());
-    for (const auto& id : e.supported_items)
-        if (id.is_tag() ? !p.tags().contains(id) : !p.eq().contains(id))
-            missing.push_back("supported_items->" + id.str());
+    if (check_exclusive)
+        for (const auto& id : e.exclusive_set)
+            if (!p.ench().contains(id))
+                missing.push_back("exclusive_set->" + id.str());
+    if (check_supported)
+        for (const auto& id : e.supported_items)
+            if (id.is_tag() ? !p.tags().contains(id) : !p.eq().contains(id))
+                missing.push_back("supported_items->" + id.str());
     std::sort(missing.begin(), missing.end());
     return join_err(missing, ", ");
 }
@@ -756,7 +763,13 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
     }
 
     // 逐行构建增量并整体 FK 校验（任一行悬空 → 整句拒绝，零部分写入）。
+    // delta-only：只校验 SET 触碰的引用列（exclusive_set / supported_items），
+    // 未改动的既有列不重校验（C1：legacy 展示类目等非注册引用不得误拒良性 UPDATE）。
     if (s.table == "enchantment") {
+        const bool touch_excl = std::any_of(s.sets.begin(), s.sets.end(),
+                                            [](const auto& kv) { return kv.first == "exclusive_set"; });
+        const bool touch_sup = std::any_of(s.sets.begin(), s.sets.end(),
+                                           [](const auto& kv) { return kv.first == "supported_items"; });
         std::vector<EnchInfo> patches;
         patches.reserve(matched.size());
         std::vector<std::string> fk_errors;
@@ -765,9 +778,11 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
             for (const auto& [c, v] : s.sets)
                 if (!set_field_enchantment(c, v, patch, r.message))
                     return r;
-            const std::string fk = check_ench_refs(*prof, patch);
-            if (!fk.empty())
-                fk_errors.push_back("enchantment '" + id.str() + "': " + fk);
+            if (touch_excl || touch_sup) {
+                const std::string fk = check_ench_refs(*prof, patch, touch_excl, touch_sup);
+                if (!fk.empty())
+                    fk_errors.push_back("enchantment '" + id.str() + "': " + fk);
+            }
             patches.push_back(std::move(patch));
         }
         if (!fk_errors.empty()) {
@@ -781,6 +796,8 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
         push_undo(_current, std::move(guard.snapshot));
         _mgr.notify_mutated();
     } else if (s.table == "equipment") {
+        const bool touch_category = std::any_of(s.sets.begin(), s.sets.end(),
+                                                [](const auto& kv) { return kv.first == "category"; });
         std::vector<Equipment> patches;
         patches.reserve(matched.size());
         std::vector<std::string> fk_errors;
@@ -789,9 +806,13 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
             for (const auto& [c, v] : s.sets)
                 if (!set_field_equipment(c, v, patch, r.message))
                     return r;
-            const std::string fk = check_eq_refs(*prof, patch);
-            if (!fk.empty())
-                fk_errors.push_back("equipment '" + id.str() + "': " + fk);
+            if (touch_category) {
+                // delta-only：仅 SET 含 category 时校验新值（既有展示类目
+                // 如 `#minecraft:sword` 非注册 tag，未改不得重校验）。
+                const std::string fk = check_eq_refs(*prof, patch);
+                if (!fk.empty())
+                    fk_errors.push_back("equipment '" + id.str() + "': " + fk);
+            }
             patches.push_back(std::move(patch));
         }
         if (!fk_errors.empty()) {
@@ -806,7 +827,7 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
         guard.commit();
         push_undo(_current, std::move(guard.snapshot));
         _mgr.notify_mutated();
-    } else { // tags
+    } else { // tags（values 写已按 delta-only：仅 SET 含 values 时校验）
         std::vector<EquipmentTag> patches;
         std::vector<std::vector<std::string>> value_sets;
         std::vector<bool> touch_values;
