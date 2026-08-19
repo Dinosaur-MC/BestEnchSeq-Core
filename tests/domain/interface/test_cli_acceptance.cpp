@@ -1385,3 +1385,236 @@ TEST_CASE("cli_slice2a_subhelp") {
     }
     TEST_PASS("subhelp plumbing");
 }
+
+// ---------------------------------------------------------------------------
+// Task 5 (slice 1): profile sql — BesqContext::run_sql 委托 + CLI 接线
+//   parse 矩阵 / 链式执行 / --format json / -i 片 3 错误 / --profile 未知 /
+//   链中止语义（先前成功语句保持生效）/ 脏退出警告
+// ---------------------------------------------------------------------------
+
+TEST_CASE("cli_slice_sql_parse_matrix") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    {   // 基本：stmt positional + 默认 format=text / -i off / --profile 空
+        const char* argv[] = {"besq", "profile", "sql", "SELECT id FROM enchantment LIMIT 1;"};
+        auto cfg = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::sql, "sql action");
+        expect(cfg.sql_stmt == "SELECT id FROM enchantment LIMIT 1;", "stmt positional");
+        expect(cfg.sql_format == "text", "format default text");
+        expect(!cfg.sql_interactive, "-i default off");
+        expect(cfg.sql_profile.empty(), "--profile default empty (CLI falls back to active)");
+    }
+    {   // 全字段：--profile / -i / --format
+        const char* argv[] = {"besq", "profile", "sql", "SELECT * FROM enchantment;",
+                              "--profile", "builtin:vanilla", "-i", "--format", "json"};
+        auto cfg = CLIApp::parse(9, const_cast<char**>(argv));
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::sql, "sql action 2");
+        expect(cfg.sql_profile == "builtin:vanilla", "--profile bound");
+        expect(cfg.sql_interactive, "-i flag bound");
+        expect(cfg.sql_format == "json", "--format json bound");
+    }
+    {   // 缺 stmt：parse 成功，stmt 空
+        const char* argv[] = {"besq", "profile", "sql"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::sql, "action set with no stmt");
+        expect(cfg.sql_stmt.empty(), "missing positional -> empty stmt");
+    }
+    {   // --format= 等号形态
+        const char* argv[] = {"besq", "profile", "sql", "SELECT * FROM equipment;", "--format=json"};
+        auto cfg = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(cfg.sql_format == "json", "equals-form --format=json");
+    }
+    TEST_PASS("sql parse matrix");
+}
+
+TEST_CASE("cli_slice_sql_chain_execute") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    {   // 单条 SELECT（读，无脏）
+        const char* argv[] = {"besq", "profile", "sql",
+                              "SELECT id FROM enchantment WHERE id='minecraft:sharpness';"};
+        int rc = CLIApp().run(4, const_cast<char**>(argv));
+        expect(rc == 0, "read chain exit 0");
+    }
+    {   // 链：SELECT + SELECT（全读）
+        const char* argv[] = {"besq", "profile", "sql",
+                              "SELECT id FROM enchantment LIMIT 1; SELECT id FROM equipment LIMIT 1;"};
+        int rc = CLIApp().run(4, const_cast<char**>(argv));
+        expect(rc == 0, "multi-statement read chain exit 0");
+    }
+    {   // 写链：INSERT + SELECT 回读（脏 → stderr 警告，仍 exit 0）
+        std::ostringstream out, err;
+        std::streambuf* oo = std::cout.rdbuf(out.rdbuf());
+        std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+        struct Restore { std::streambuf* o; std::streambuf* e;
+                         ~Restore() { std::cout.rdbuf(o); std::cerr.rdbuf(e); } } restore{oo, oe};
+        const char* argv[] = {"besq", "profile", "sql",
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:chain','C',1,1,'#minecraft:swords'); "
+            "SELECT id FROM enchantment WHERE id='test:chain';"};
+        int rc = CLIApp().run(4, const_cast<char**>(argv));
+        expect(rc == 0, "write chain exit 0");
+        expect(out.str().find("test:chain") != std::string::npos, "SELECT echoes inserted row");
+        expect(err.str().find("unsaved") != std::string::npos, "dirty warning on stderr");
+        expect(err.str().find("builtin:vanilla") != std::string::npos, "dirty warning names the profile");
+    }
+    TEST_PASS("sql chain execute");
+}
+
+TEST_CASE("cli_slice_sql_format_json") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    std::ostringstream out;
+    std::streambuf* old = std::cout.rdbuf(out.rdbuf());
+    struct Restore { std::streambuf* old; ~Restore() { std::cout.rdbuf(old); } } restore{old};
+    const char* argv[] = {"besq", "profile", "sql",
+                          "SELECT id FROM enchantment WHERE id='minecraft:sharpness';",
+                          "--format", "json"};
+    int rc = CLIApp().run(6, const_cast<char**>(argv));
+    expect(rc == 0, "json format exit 0");
+    const std::string s = out.str();
+    expect(!s.empty() && s[0] == '[', "stdout is a JSON array");
+    expect(s.find("minecraft:sharpness") != std::string::npos, "row value present in array");
+    expect(s.find("\"id\"") != std::string::npos, "header present in array");
+    TEST_PASS("sql json format");
+}
+
+TEST_CASE("cli_slice_sql_interactive") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    {   // -i 单独 → 片 3 错误（不打印用法、不执行）
+        try {
+            const char* argv[] = {"besq", "profile", "sql", "-i"};
+            CLIApp().run(4, const_cast<char**>(argv));
+            expect(false, "-i alone should throw slice-3 error");
+        } catch (const std::runtime_error& e) {
+            expect(std::string(e.what()).find("slice 3") != std::string::npos, "error mentions slice 3");
+        }
+    }
+    {   // -i + stmt → 同样报错（语句不执行）
+        try {
+            const char* argv[] = {"besq", "profile", "sql", "SELECT id FROM enchantment LIMIT 1;", "-i"};
+            CLIApp().run(5, const_cast<char**>(argv));
+            expect(false, "-i with stmt should throw slice-3 error");
+        } catch (const std::runtime_error& e) {
+            expect(std::string(e.what()).find("slice 3") != std::string::npos, "slice-3 error with stmt too");
+        }
+    }
+    TEST_PASS("sql interactive slice-3 error");
+}
+
+TEST_CASE("cli_slice_sql_unknown_profile") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    try {
+        const char* argv[] = {"besq", "profile", "sql", "SELECT * FROM enchantment;",
+                              "--profile", "nope_nope"};
+        CLIApp().run(6, const_cast<char**>(argv));
+        expect(false, "unknown --profile should throw");
+    } catch (const std::runtime_error& e) {
+        expect(std::string(e.what()).find("nope_nope") != std::string::npos, "clean error names the profile");
+    }
+    TEST_PASS("sql unknown profile clean error");
+}
+
+TEST_CASE("cli_slice_sql_chain_error") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    {   // CLI：链中第二句重复 INSERT → 中止（exit 1 via throw），错误报语句序号
+        try {
+            const char* argv[] = {"besq", "profile", "sql",
+                "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                "VALUES ('test:dup','D',1,1,'#minecraft:swords'); "
+                "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                "VALUES ('test:dup','D',1,1,'#minecraft:swords');"};
+            CLIApp().run(4, const_cast<char**>(argv));
+            expect(false, "duplicate insert should abort the chain");
+        } catch (const std::runtime_error& e) {
+            expect(std::string(e.what()).find("statement 2") != std::string::npos,
+                   "error reports the failing statement index");
+        }
+    }
+    {   // 委托：run_sql 直接验证——先前成功语句保持生效 + 脏报告 + steps 语义
+        BesqContext ctx;
+        ctx.load_builtin();
+        std::string error;
+        auto r = ctx.run_sql(
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:kept','K',1,1,'#minecraft:swords'); "
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:kept','K',1,1,'#minecraft:swords');",
+            "builtin:vanilla", error);
+        expect(!error.empty(), "chain error reported");
+        expect(error.find("statement 2") != std::string::npos, "error names statement 2");
+        expect(r.steps.size() == 2, "two steps executed before abort");
+        expect(r.last.affected == 0, "last result = failing statement result");
+        expect(r.last.message.find("already exists") != std::string::npos, "last message = executor error");
+        const Profile& p = ctx.profile("builtin:vanilla");
+        expect(p.ench().contains(NSID("test:kept")), "earlier successful statement remains applied");
+        expect(r.dirty.size() == 1 && r.dirty[0] == "builtin:vanilla", "dirty reported after abort");
+    }
+    {   // 解析错误：整体解析先行，零执行
+        BesqContext ctx;
+        ctx.load_builtin();
+        std::string error;
+        auto r = ctx.run_sql("SELEC nope;", "builtin:vanilla", error);
+        expect(!error.empty(), "parse error reported");
+        expect(r.steps.empty(), "no statements executed on parse error");
+    }
+    {   // 未知 profile：use() 异常 → error 通道（干净错误）
+        BesqContext ctx;
+        ctx.load_builtin();
+        std::string error;
+        auto r = ctx.run_sql("SELECT id FROM enchantment LIMIT 1;", "nope_nope", error);
+        expect(!error.empty(), "unknown profile error reported");
+        expect(r.steps.empty(), "no statements executed on unknown profile");
+    }
+    TEST_PASS("sql chain error semantics");
+}
+
+TEST_CASE("cli_slice_sql_dirty_warning") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    {   // 读链 → 无警告
+        std::ostringstream out, err;
+        std::streambuf* oo = std::cout.rdbuf(out.rdbuf());
+        std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+        struct Restore { std::streambuf* o; std::streambuf* e;
+                         ~Restore() { std::cout.rdbuf(o); std::cerr.rdbuf(e); } } restore{oo, oe};
+        const char* argv[] = {"besq", "profile", "sql", "SELECT id FROM enchantment LIMIT 1;"};
+        int rc = CLIApp().run(4, const_cast<char**>(argv));
+        expect(rc == 0, "read chain exit 0");
+        expect(err.str().empty(), "no dirty warning on clean chain");
+    }
+    {   // 委托级：SAVE 清脏 → dirty 为空（SAVE 写临时 profiles 目录）
+        BesqContext ctx;
+        ctx.load_builtin();
+        static int counter = 0;
+        const std::string tmp =
+            (std::filesystem::temp_directory_path() / ("besq_sql_cli_save_" + std::to_string(++counter))).string();
+        std::error_code ec;
+        std::filesystem::create_directories(tmp, ec);
+        ctx.set_profiles_dir(tmp);
+        std::string error;
+        auto r = ctx.run_sql(
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:saved','S',1,1,'#minecraft:swords'); SAVE;",
+            "builtin:vanilla", error);
+        expect(error.empty(), "insert+save chain ok");
+        expect(r.dirty.empty(), "SAVE cleared dirty");
+        expect(std::filesystem::exists(std::filesystem::path(tmp) / "builtin_vanilla.json"),
+               "SAVE wrote sanitized profile file");
+        std::filesystem::remove_all(tmp, ec);
+    }
+    {   // 无 stmt 无 -i → 简短用法 exit 0
+        std::ostringstream out;
+        std::streambuf* old = std::cout.rdbuf(out.rdbuf());
+        struct Restore { std::streambuf* old; ~Restore() { std::cout.rdbuf(old); } } restore{old};
+        const char* argv[] = {"besq", "profile", "sql"};
+        int rc = CLIApp().run(3, const_cast<char**>(argv));
+        expect(rc == 0, "no stmt no -i -> brief usage exit 0");
+        expect(out.str().find("profile sql -i") != std::string::npos, "usage shows -i form");
+        expect(out.str().find("profile sql \"<stmt>\"") != std::string::npos, "usage shows stmt form");
+    }
+    TEST_PASS("sql dirty warning + brief usage");
+}

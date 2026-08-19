@@ -573,6 +573,88 @@ int CLIApp::run_profile(const Config& config) {
             flush_output();
             return 0;
         }
+        case Config::ProfileAction::sql: {
+            // -i：片 1 仅解析接受，执行报片 3 错误（先于 stmt 检查——不给 REPL 暗示）
+            if (config.sql_interactive)
+                throw std::runtime_error(tr("cli.err.sql_repl_slice3"));
+            // 无 stmt + 无 -i：打印简短用法（exit 0）
+            if (config.sql_stmt.empty()) {
+                std::cout << "profile sql -i\n";
+                std::cout << "profile sql \"<stmt>\"\n";
+                flush_output();
+                return 0;
+            }
+            if (config.sql_format != "text" && config.sql_format != "json")
+                throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.sql_format));
+            _ctx.load_profiles();
+            // 工作 profile：--profile 显式 > ctx 当前激活；未知 → 预校验干净报错
+            // （SqlSession::use() 对未知 profile 抛裸 runtime_error，此处先挡）
+            const std::string prof = config.sql_profile.empty() ? _ctx.active_profile() : config.sql_profile;
+            if (!_ctx.profile_exists(prof))
+                throw std::runtime_error(tr_fmt("cli.err.profile_not_found", prof));
+
+            std::string error;
+            auto result = _ctx.run_sql(config.sql_stmt, prof, error);
+            if (!error.empty())
+                throw std::runtime_error(error);
+
+            // 逐条消息：text → stdout；json → stderr（保持 stdout 纯 JSON 机器输出）
+            for (const auto& step : result.steps) {
+                if (step.message.empty())
+                    continue;
+                std::string msg = step.message;
+                // SAVE 成功消息（"saved: a, b"）本地化；STATUS 摘要等保持原文
+                if (msg.starts_with("saved: "))
+                    msg = tr_fmt("cli.msg.sql_saved", msg.substr(7));
+                if (config.sql_format == "json")
+                    std::cerr << msg << "\n";
+                else
+                    std::cout << msg << "\n";
+            }
+            // 最后一条结果渲染：json → 数组（[表头, 行...]）；text → 对齐表格
+            if (config.sql_format == "json") {
+                Json arr = Json::array();
+                Json headers = Json::array();
+                for (const auto& h : result.last.headers)
+                    headers.push_back(Json(h));
+                arr.push_back(std::move(headers));
+                for (const auto& row : result.last.rows) {
+                    Json r = Json::array();
+                    for (const auto& cell : row)
+                        r.push_back(Json(cell));
+                    arr.push_back(std::move(r));
+                }
+                std::cout << arr.to_string() << "\n";
+            } else if (!result.last.headers.empty()) {
+                // 数值列启发：列内全部单元格为整数字符串 → 右对齐
+                auto is_int_str = [](const std::string& s) {
+                    if (s.empty())
+                        return false;
+                    size_t i = (s[0] == '-' || s[0] == '+') ? 1 : 0;
+                    if (i >= s.size())
+                        return false;
+                    for (; i < s.size(); ++i)
+                        if (!std::isdigit(static_cast<unsigned char>(s[i])))
+                            return false;
+                    return true;
+                };
+                std::vector<bool> numeric(result.last.headers.size(), false);
+                for (size_t c = 0; c < result.last.headers.size(); ++c) {
+                    bool all_int = !result.last.rows.empty();
+                    for (const auto& row : result.last.rows) {
+                        if (c >= row.size() || !is_int_str(row[c])) { all_int = false; break; }
+                    }
+                    numeric[c] = all_int;
+                }
+                print_aligned_table(result.last.headers, result.last.rows, numeric);
+            }
+            flush_output();
+            // 脏退出警告（stderr，exit 0）：任一语句写过且未 SAVE
+            if (!result.dirty.empty())
+                std::cerr << tr_fmt("cli.msg.sql_unsaved",
+                                    string_utils::join(result.dirty, ", ")) << std::endl;
+            return 0;
+        }
         default:
             // 无动作（如 `besq profile` 裸命令）不再静默成功——按解析失败处理
             throw std::runtime_error(tr("cli.err.parse_failed"));
@@ -738,6 +820,14 @@ const auto PROFILE_OPTS = OptionTable{
             Option<int>{.long_name = "page",  .help_key = "cli.help.page_desc",  .default_v = 1},
             Option<std::string>{.long_name = "format", .help_key = "cli.help.inspect_format_desc", .default_v = std::string("text")},
         }},
+    Command<Positional<std::string>, Option<std::string>, Flag, Option<std::string>>{
+        .name = "sql", .help_key = "cli.cmd.sql_desc",
+        .table = OptionTable{
+            Positional<std::string>{.name = "stmt", .help_key = "cli.help.sql_stmt_desc"},
+            Option<std::string>{.long_name = "profile", .help_key = "cli.help.sql_profile_desc"},
+            Flag{.long_name = "interactive", .short_name = 'i', .help_key = "cli.help.sql_interactive_desc"},
+            Option<std::string>{.long_name = "format", .help_key = "cli.help.sql_format_desc", .default_v = std::string("text")},
+        }},
 };
 
 // ── solve 命令表 = 顶层表的前 20 项（全局三项 + list-langs + lang + 16 solve 选项）──
@@ -791,7 +881,7 @@ const auto BESQ_OPTIONS = OptionTable{
         .name = "solve", .alias = "calc", .help_key = "cli.cmd.solve_desc",
         .table = SOLVE_CMD_OPTS,
     },
-    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>, Positional<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>>{
+    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>, Positional<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>, Command<Positional<std::string>, Option<std::string>, Flag, Option<std::string>>>{
         .name = "profile", .help_key = "cli.cmd.profile_desc", .table = PROFILE_OPTS,
     },
     Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>>>{

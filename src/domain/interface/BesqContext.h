@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "domain/algorithm/types/AlgorithmState.h"
+#include "domain/business/sql/SqlExecutor.h"   // business::sql::SqlResult（run_sql 返回类型）
 #include "domain/orchestration/orchestration.h"
 #include "domain/orchestration/types/SolveSnapshot.h"
 
@@ -203,6 +204,30 @@ public:
     /// Export the active profile's data as a string (in-memory JSON), without
     /// writing a file.  Used by `--export -` (stdout dump).
     std::string export_profile_to_string() const;
+
+    // ── Profile SQL（profile sql，片 1 链式模式）────────────────────────
+    /// 一次 profile sql 链式执行的结果。
+    /// - `last`：最后一条语句的结果（链中止 = 失败语句的结果；headers 空 =
+    ///   写/STATUS/SAVE 语句，消息在 `steps` 中）。
+    /// - `steps`：每条已执行语句的结果（顺序；含失败语句），CLI 逐条打印消息。
+    /// - `dirty`：链结束后的脏 profile 名（排序），供 CLI 退出警告
+    ///   （选择：随结果返回，而非持久会话 + sql_dirty_profiles() 访问器——
+    ///   片 1 CLI 每进程一次调用，会话状态无需跨调用保留）。
+    struct SqlRunResult {
+        business::sql::SqlResult last;
+        std::vector<business::sql::SqlResult> steps;
+        std::vector<std::string> dirty;
+    };
+
+    /// 链式执行多条 SQL 语句（分号分隔）：先整体解析（解析失败 → \p error
+    /// 非空、零执行）；再逐条执行，语句错误中止链（\p error = "statement N
+    /// failed: <消息>"），**之前成功的语句保持生效**（无跨语句回滚）。
+    /// \p profile 为会话初始工作 profile（空 = 不切换；未知 → \p error 非空）。
+    /// 返回最后一条语句的 SqlResult + 逐步结果 + 脏 profile。会话为调用内
+    /// 新建（自包含），数据源 = 本 context 的私有 ProfileManager +
+    /// profiles_dir（set_profiles_dir 覆盖 > AppConfig::get().profiles_dir >
+    /// 默认 <exe_dir>/profiles，与 load_profiles() 同解析）。
+    SqlRunResult run_sql(const std::string& statements, const std::string& profile, std::string& error);
 
     // ── Registry access (active profile, read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;

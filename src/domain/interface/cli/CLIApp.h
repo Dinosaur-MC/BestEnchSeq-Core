@@ -24,7 +24,7 @@ public:
     // ── Parser types ──
     struct Config {
         enum class Cmd { solve, profile, algo, serve };
-        enum class ProfileAction { none, list, set_dir, import, export_, info, publish, inspect };
+        enum class ProfileAction { none, list, set_dir, import, export_, info, publish, inspect, sql };
         enum class AlgoAction { none, list, set_dir, inspect };
 
         Cmd cmd = Cmd::solve;
@@ -72,6 +72,11 @@ public:
         int inspect_page  = 1;
         std::string inspect_format = "text";
         std::vector<std::string_view> command_path;   // Task 6 用；本任务先填充
+        // sql 动作
+        std::string sql_stmt;        // 位置参数：SQL 语句串（分号分隔链）
+        std::string sql_profile;     // --profile：会话初始工作 profile（空 = ctx 当前激活）
+        std::string sql_format = "text"; // --format：text | json
+        bool sql_interactive = false;    // -i：片 1 解析接受，执行报片 3 错误
         // algo 动作
         AlgoAction algo_action = AlgoAction::none;
         std::string algo_target;         // set_dir <dir>
@@ -178,6 +183,12 @@ private:
             cfg.inspect_limit  = std::get<4>(i.value).value_or(Config{}.inspect_limit);
             cfg.inspect_page   = std::get<5>(i.value).value_or(Config{}.inspect_page);
             cfg.inspect_format = std::get<6>(i.value).value_or(Config{}.inspect_format); }
+        else if (std::get<10>(v).has_value()) {               cfg.profile_action = Config::ProfileAction::sql;
+            const auto& s = *std::get<10>(v);
+            cfg.sql_stmt        = std::get<0>(s.value).value_or(Config{}.sql_stmt);
+            cfg.sql_profile     = std::get<1>(s.value).value_or(Config{}.sql_profile);
+            cfg.sql_interactive = std::get<2>(s.value);
+            cfg.sql_format      = std::get<3>(s.value).value_or(Config{}.sql_format); }
         return cfg;
     }
 

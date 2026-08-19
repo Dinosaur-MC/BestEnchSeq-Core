@@ -5,6 +5,8 @@
 #include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
+#include "domain/business/sql/SqlParser.h"
+#include "domain/business/sql/SqlSession.h"
 #include "domain/orchestration/pipelines/AutoLoadPipeline.h"
 #include "domain/orchestration/pipelines/ExportPipeline.h"
 #include "domain/orchestration/pipelines/ManagePipeline.h"
@@ -380,6 +382,89 @@ std::string BesqContext::export_profile_to_string() const {
     req.format = ExportRequest::Format::Json;
     // output_path 留空 → ExportPipeline 走内存导出，返回 result.content。
     return ExportPipeline::run(profile, req).content;
+}
+
+// ====================================================================
+// Profile SQL（profile sql 片 1：链式执行）
+// ====================================================================
+
+namespace {
+
+/// 语句结果是否为错误（区别于成功信息形态）：
+/// 成功形态：空 message（SELECT）、"N row(s) affected"（写，含 0）、
+/// "saved: ..." / "nothing to save"（SAVE）、"profile: ..."（STATUS 摘要）。
+/// 其余非空 message（unknown table/column、FK violation、already exists、
+/// cannot delete、save failed 等）均为语句错误 → 中止链。
+bool sql_statement_failed(const business::sql::SqlResult& r) {
+    if (r.message.empty())
+        return false;
+    if (r.message.ends_with("row(s) affected"))
+        return false;
+    if (r.message == "nothing to save")
+        return false;
+    if (r.message.starts_with("saved: "))
+        return false;
+    if (r.message.starts_with("profile: "))
+        return false;
+    return true;
+}
+
+} // namespace
+
+BesqContext::SqlRunResult BesqContext::run_sql(const std::string& statements,
+                                               const std::string& profile,
+                                               std::string& error) {
+    error.clear();
+    SqlRunResult out;
+
+    // 1. 整体解析先行：解析失败 → 零执行（链语义 = 全量解析 → 顺序执行）。
+    business::sql::SqlParser parser;
+    std::vector<business::sql::SqlStmt> stmts = parser.parse(statements);
+    if (!parser.error.empty()) {
+        error = tr_fmt("cli.err.sql_unsupported", parser.error);
+        return out;
+    }
+
+    // 2. 会话：调用内新建（自包含——片 1 CLI 每进程一次调用，dirty 经返回值
+    //    上抛，无需跨调用会话状态）。profiles_dir 与 load_profiles() 同解析：
+    //    set_profiles_dir 覆盖 > AppConfig::get().profiles_dir > <exe_dir>/profiles。
+    std::string dir = _impl->profiles_dir;
+    if (dir.empty())
+        dir = AppConfig::get().profiles_dir;
+    if (dir.empty()) {
+        const auto exe = exe_dir();
+        dir = (exe.empty() ? std::filesystem::current_path() / "profiles" : exe / "profiles").string();
+    }
+    business::sql::SqlSession session(_impl->profiles, dir);
+    if (!profile.empty()) {
+        try {
+            session.use(profile);
+        } catch (const std::exception& e) {
+            // use() 对未知 profile 抛 std::runtime_error（无错误通道）——
+            // CLI 层先 profile_exists 预校验报本地化错误；这里兜底转 error。
+            error = e.what();
+            return out;
+        }
+    }
+
+    // 3. 顺序执行；语句错误中止链（先前成功语句保持生效——无跨语句回滚）。
+    for (size_t i = 0; i < stmts.size(); ++i) {
+        business::sql::SqlResult r;
+        try {
+            r = session.execute(stmts[i]);
+        } catch (const std::exception& e) {
+            r.message = e.what();
+        }
+        out.steps.push_back(r);
+        out.last = r;
+        if (sql_statement_failed(r)) {
+            error = tr_fmt("cli.err.sql_stmt_failed", i + 1, r.message);
+            out.dirty = session.dirty_profiles();
+            return out;
+        }
+    }
+    out.dirty = session.dirty_profiles();
+    return out;
 }
 
 // ====================================================================
