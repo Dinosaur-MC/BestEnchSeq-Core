@@ -1033,3 +1033,18 @@ TEST_CASE("cli_slice1_help_text") {
     expect(sv.find("--target") == std::string::npos, "serve help has no solve options");
     TEST_PASS("slice1 help_text");
 }
+
+TEST_CASE("cli_slice1_set_dir_parse_guard") {
+    {   // parse 层：缺参 set_dir 解析成功，target 为空
+        const char* argv[] = {"besq", "profile", "set_dir"};
+        auto cfg = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(cfg.profile_action == CLIApp::Config::ProfileAction::set_dir, "action set_dir");
+        expect(cfg.profile_target.empty(), "missing positional -> empty target");
+    }
+    {   // run 层：空目录拒绝
+        const char* argv[] = {"besq", "profile", "set_dir"};
+        expect_throws([&] { CLIApp().run(3, const_cast<char**>(argv)); },
+                      "set_dir empty -> run throws empty_dir");
+    }
+    TEST_PASS("set_dir parse guard");
+}

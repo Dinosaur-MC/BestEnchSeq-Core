@@ -31,6 +31,7 @@
 ///   BESQ_MEMORY_MB       — Memory budget in MB for A* search          (default: 2048)
 ///   BESQ_VERBOSE         — Enable verbose diagnostic output           (default: false)
 ///   BESQ_ALGO_DIR        — Algorithm plugin directory path             (default: <exe_dir>/algorithms/)
+///   BESQ_PROFILES_DIR    — Profiles directory (default: <exe_dir>/profiles)
 ///   BESQ_LOG_DIR         — Log output directory                        (default: <exe_dir>/logs)
 ///   BESQ_LOG_LEVEL       — Minimum log level (0=debug,1=info,2=warn,3=error, default: 0)
 ///   BESQ_LOG_RETENTION   — Max historic log files to keep during rotation (default: 5)
@@ -50,6 +51,7 @@ struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
     std::string algo_dir     = (exe_dir() / "algorithms").string(); // <exe_dir>/algorithms/
+    std::string profiles_dir;               // "" = 默认 <exe_dir>/profiles（profile set_dir 持久化）
     std::string log_dir      = (exe_dir() / "logs").string();       // <exe_dir>/logs
     int32_t  log_level       = 0;     // 0=Debug, 1=Info, 2=Warn, 3=Error
     size_t   log_retention   = 5;
@@ -107,12 +109,17 @@ struct AppConfig {
                                                       cfg.log_console_level);
             if (file.has("log_retention"))
                 cfg.log_retention = checked_retention(file["log_retention"], cfg.log_retention);
+            if (file.has("profiles_dir") && file["profiles_dir"].type() == JsonType::String)
+                cfg.profiles_dir = file["profiles_dir"].as<std::string>();
+            if (file.has("algo_dir") && file["algo_dir"].type() == JsonType::String)
+                cfg.algo_dir = file["algo_dir"].as<std::string>();
         }
 
         // ── env layer (overrides config.json per-field) ──
         cfg.memory_mb     = get_env<int64_t> ("BESQ_MEMORY_MB",     cfg.memory_mb);
         cfg.verbose       = get_env<bool>    ("BESQ_VERBOSE",       cfg.verbose);
         cfg.algo_dir      = get_env<std::string>("BESQ_ALGO_DIR",  cfg.algo_dir);
+        cfg.profiles_dir  = get_env<std::string>("BESQ_PROFILES_DIR", cfg.profiles_dir);
         cfg.log_dir       = get_env<std::string>("BESQ_LOG_DIR",   cfg.log_dir);
         cfg.log_level     = get_env<int32_t>  ("BESQ_LOG_LEVEL",    cfg.log_level);
         cfg.log_retention = get_env<size_t>   ("BESQ_LOG_RETENTION", cfg.log_retention);

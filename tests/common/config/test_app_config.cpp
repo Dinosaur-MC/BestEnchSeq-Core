@@ -186,4 +186,20 @@ TEST_CASE("test_save_failure") {
     std::cout << "  PASS: test_save_failure" << std::endl;
 }
 
+TEST_CASE("test_config_profiles_dir") {
+    clear_runtime_env();
+    unset_env("BESQ_PROFILES_DIR");
+    unset_env("BESQ_ALGO_DIR");
+    ConfigFileGuard guard(AppConfig::config_file_path());
+    write_config(R"({"profiles_dir": "/data/p", "algo_dir": "/data/a"})");
+    auto cfg = AppConfig::load();
+    expect(cfg.profiles_dir == "/data/p", "config.json profiles_dir read");
+    expect(cfg.algo_dir == "/data/a", "config.json algo_dir read");
+    set_env("BESQ_PROFILES_DIR", "/env/p");
+    auto cfg2 = AppConfig::load();
+    expect(cfg2.profiles_dir == "/env/p", "env BESQ_PROFILES_DIR wins over config.json");
+    unset_env("BESQ_PROFILES_DIR");
+    TEST_PASS("config profiles_dir");
+}
+
 } // anonymous namespace

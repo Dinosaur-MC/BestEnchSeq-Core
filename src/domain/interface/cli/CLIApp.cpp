@@ -41,27 +41,12 @@ std::vector<std::string> split_profile_members(const std::string& value) {
 }
 
 /// set_dir 持久化：read-modify-write config.json（保留未知字段；best-effort）。
-/// Task 7 完善 AppConfig 字段读取；此处实现已完整。
 void persist_dir_settings(bool profile, const std::string& dir) {
     Json o = AppConfig::load_config_file();
     if (!o.is_valid() || o.type() != JsonType::Object)
         o = Json::object();
     o[profile ? "profiles_dir" : "algo_dir"] = Json(dir);
     AppConfig::save_config_file(o);
-}
-
-/// 读取持久化的 profiles_dir：BESQ_PROFILES_DIR env > config.json "profiles_dir"（set_dir 写入）。
-/// Task 7 将把该读取迁入 AppConfig::profiles_dir 字段；此处先读同一数据源（env + config.json）。
-std::string persisted_profiles_dir() {
-    const std::string env_dir = get_env_str("BESQ_PROFILES_DIR");
-    if (!env_dir.empty())
-        return env_dir;
-    Json o = AppConfig::load_config_file();
-    if (!o.is_valid() || o.type() != JsonType::Object)
-        return {};
-    if (!o.has("profiles_dir") || o["profiles_dir"].type() != JsonType::String)
-        return {};
-    return o["profiles_dir"].as<std::string>();
 }
 
 } // namespace
@@ -237,7 +222,7 @@ int CLIApp::run(int argc, char* argv[]) {
     //    inventory solve so the task's enchantments resolve correctly.
     //    Profile 目录：持久化 profiles_dir（set_dir / BESQ_PROFILES_DIR）> 默认
     {
-        const std::string pdir = persisted_profiles_dir();
+        const std::string pdir = AppConfig::get().profiles_dir;
         if (!pdir.empty())
             _ctx.set_profiles_dir(pdir);
     }
@@ -303,7 +288,7 @@ int CLIApp::run(int argc, char* argv[]) {
 
 int CLIApp::run_profile(const Config& config) {
     // set_dir 持久化的目录优先于默认
-    const std::string pdir = persisted_profiles_dir();
+    const std::string pdir = AppConfig::get().profiles_dir;
     if (!pdir.empty())
         _ctx.set_profiles_dir(pdir);
 
