@@ -71,6 +71,50 @@ TEST_CASE("sql_parser_lexer_error_propagates") {
     TEST_PASS("lexer error propagation");
 }
 
+TEST_CASE("sql_lexer_bool_case_insensitive") {
+    // spec §2.2：TRUE/FALSE 大小写不敏感——bool 关键字按小写文本比较并归一
+    // 为小写 token 文本（执行器 parse_bool/哨兵只认 "true"/"false"）。
+    SqlLexer lx("TRUE FALSE TrUe");
+    auto t1 = lx.next();
+    expect(t1.kind == SqlToken::Kind::bool_ && t1.text == "true", "TRUE lexes as bool true");
+    auto t2 = lx.next();
+    expect(t2.kind == SqlToken::Kind::bool_ && t2.text == "false", "FALSE lexes as bool false");
+    auto t3 = lx.next();
+    expect(t3.kind == SqlToken::Kind::bool_ && t3.text == "true", "mixed-case TrUe lexes as bool true");
+    expect(lx.next().kind == SqlToken::Kind::end, "end");
+    TEST_PASS("lexer bool case insensitive");
+}
+
+TEST_CASE("sql_parser_case_insensitive") {
+    // 列名大小写不敏感（spec §2.2）：SELECT cols / UPDATE SET / WHERE / INSERT
+    // cols 解析期归一为小写（ORDER BY 早已归一）。
+    auto s = SqlParser{}.parse("SELECT MAX_LEVEL, ID FROM enchantment WHERE NAME='x' ORDER BY ID;");
+    expect(s.size() == 1, "uppercase select parses");
+    const auto& sel = std::get<SelectStmt>(s[0]);
+    expect(sel.cols.size() == 2 && sel.cols[0] == "max_level" && sel.cols[1] == "id", "select cols lowercased");
+    expect(sel.where.size() == 1 && sel.where[0].col == "name" && sel.where[0].val == "x", "where col lowercased");
+    expect(sel.order_by == "id", "order by lowercased");
+
+    auto u = SqlParser{}.parse("UPDATE ENCHANTMENT SET MAX_LEVEL=3 WHERE ID='minecraft:sharpness';");
+    expect(u.size() == 1, "uppercase update parses");
+    const auto& upd = std::get<UpdateStmt>(u[0]);
+    expect(upd.sets.size() == 1 && upd.sets[0].first == "max_level", "set col lowercased");
+    expect(upd.where.size() == 1 && upd.where[0].col == "id", "update where col lowercased");
+
+    auto i = SqlParser{}.parse("INSERT INTO ENCHANTMENT (ID, NAME, MAX_LEVEL) VALUES ('a:b','AB',3);");
+    expect(i.size() == 1, "uppercase insert parses");
+    const auto& ins = std::get<InsertStmt>(i[0]);
+    expect(ins.cols.size() == 3 && ins.cols[0] == "id" && ins.cols[2] == "max_level", "insert cols lowercased");
+
+    // WHERE TRUE（大写）→ 哨兵（匹配全部行）
+    auto t = SqlParser{}.parse("UPDATE enchantment SET name='x' WHERE TRUE;");
+    expect(t.size() == 1, "uppercase TRUE parses");
+    const auto& ut = std::get<UpdateStmt>(t[0]);
+    expect(ut.where.size() == 1 && ut.where[0].col.empty() && ut.where[0].val == "true",
+           "uppercase TRUE is match-all sentinel");
+    TEST_PASS("parser case insensitive");
+}
+
 TEST_CASE("sql_parser_errors") {
     SqlParser p;
     auto r = p.parse("FROB x;");

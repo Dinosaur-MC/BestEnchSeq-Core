@@ -417,8 +417,7 @@ bool set_field_tags(
 // loader 注入的展示类目 equipment.category，如 `#minecraft:sword` 非注册
 // tag）未改动的列不得重校验——否则良性 UPDATE 会被误拒（C1）。
 
-std::string check_ench_refs(const Profile& p, const EnchInfo& e, bool check_exclusive = true,
-                            bool check_supported = true) {
+std::string check_ench_refs(const Profile& p, const EnchInfo& e, bool check_exclusive = true, bool check_supported = true) {
     std::vector<std::string> missing;
     if (check_exclusive)
         for (const auto& id : e.exclusive_set)
@@ -664,6 +663,13 @@ SqlResult SqlExecutor::exec_insert(const InsertStmt& s) {
             r.message = "enchantment requires supported_items (applicability)";
             return r;
         }
+        // C1（终审）：max_level/multiplier 必填且 >=1——镜像 loader 不变量
+        // （RegistryLoader::from_dto 丢弃 max_level<=0 || multiplier<=0 的行）。
+        // 缺失列取默认 0/0 会"SAVE 成功但 reload 静默丢行"，故 INSERT 直接拒绝。
+        if (e.max_level < 1 || e.multiplier < 1) {
+            r.message = "enchantment requires max_level>=1 and multiplier>=1";
+            return r;
+        }
         const std::string fk = check_ench_refs(*prof, e);
         if (!fk.empty()) {
             r.message = "FK violation: " + fk;
@@ -671,9 +677,18 @@ SqlResult SqlExecutor::exec_insert(const InsertStmt& s) {
         }
         ProfileWriteGuard guard(_mgr, prof);
         prof->add_enchantment(e);
+        // I3（终审）：push_undo 先于 commit——push_undo 抛异常时 guard 未提交，
+        // 仍会恢复语句前快照。快照按值传入（不 move）：push_undo 内部任何异常
+        // 都不会消费 guard 自身的快照（move 会让 guard 拿到 moved-from 的
+        // 空 profile，恢复即丢数据）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        // 提交后 bookkeeping：notify_mutated 只清有效视图缓存（noexcept），
+        // 仍按 I3 裁决以 try/catch 兜底——任何异常不得从 execute() 逃逸。
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     } else if (s.table == "equipment") {
         Equipment eq;
         for (size_t i = 0; i < s.cols.size(); ++i)
@@ -690,9 +705,13 @@ SqlResult SqlExecutor::exec_insert(const InsertStmt& s) {
         }
         ProfileWriteGuard guard(_mgr, prof);
         prof->add_equipment(eq);
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     } else { // tags
         EquipmentTag t;
         std::vector<std::string> values;
@@ -719,9 +738,13 @@ SqlResult SqlExecutor::exec_insert(const InsertStmt& s) {
             }
             res->add_tag(t.id.get_ns() + ":" + t.id.get_id(), std::unordered_set<std::string>(values.begin(), values.end()));
         }
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     }
 
     r.affected = 1;
@@ -773,10 +796,17 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
     // delta-only：只校验 SET 触碰的引用列（exclusive_set / supported_items），
     // 未改动的既有列不重校验（C1：legacy 展示类目等非注册引用不得误拒良性 UPDATE）。
     if (s.table == "enchantment") {
-        const bool touch_excl = std::any_of(s.sets.begin(), s.sets.end(),
-                                            [](const auto& kv) { return kv.first == "exclusive_set"; });
-        const bool touch_sup = std::any_of(s.sets.begin(), s.sets.end(),
-                                           [](const auto& kv) { return kv.first == "supported_items"; });
+        const bool touch_excl =
+            std::any_of(s.sets.begin(), s.sets.end(), [](const auto& kv) { return kv.first == "exclusive_set"; });
+        const bool touch_sup =
+            std::any_of(s.sets.begin(), s.sets.end(), [](const auto& kv) { return kv.first == "supported_items"; });
+        // C1（终审）：max_level/multiplier 校验 delta-only——仅当 SET 触碰该列
+        // 时校验新值 >=1（与 supported_items 同款 touch-gating；未改动的既有
+        // 列不得重校验，否则良性 UPDATE 会被误拒）。
+        const bool touch_max =
+            std::any_of(s.sets.begin(), s.sets.end(), [](const auto& kv) { return kv.first == "max_level"; });
+        const bool touch_mul =
+            std::any_of(s.sets.begin(), s.sets.end(), [](const auto& kv) { return kv.first == "multiplier"; });
         std::vector<EnchInfo> patches;
         patches.reserve(matched.size());
         std::vector<std::string> fk_errors;
@@ -788,6 +818,11 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
             if (touch_sup && patch.supported_items.empty()) {
                 // 适用性必填（同 INSERT）：清空 supported_items 的魔咒回读即丢。
                 r.message = "enchantment requires supported_items (applicability)";
+                return r;
+            }
+            if ((touch_max && patch.max_level < 1) || (touch_mul && patch.multiplier < 1)) {
+                // 镜像 loader 不变量：SET 把 max_level/multiplier 改到 <=0 → 拒绝。
+                r.message = "enchantment requires max_level>=1 and multiplier>=1";
                 return r;
             }
             if (touch_excl || touch_sup) {
@@ -804,12 +839,16 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
         ProfileWriteGuard guard(_mgr, prof);
         for (const EnchInfo& patch : patches)
             prof->update_enchantment(patch);
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     } else if (s.table == "equipment") {
-        const bool touch_category = std::any_of(s.sets.begin(), s.sets.end(),
-                                                [](const auto& kv) { return kv.first == "category"; });
+        const bool touch_category =
+            std::any_of(s.sets.begin(), s.sets.end(), [](const auto& kv) { return kv.first == "category"; });
         std::vector<Equipment> patches;
         patches.reserve(matched.size());
         std::vector<std::string> fk_errors;
@@ -836,9 +875,13 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
             prof->remove_equipment(patch.id);
             prof->add_equipment(patch);
         }
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     } else { // tags（values 写已按 delta-only：仅 SET 含 values 时校验）
         std::vector<EquipmentTag> patches;
         std::vector<std::vector<std::string>> value_sets;
@@ -882,9 +925,13 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
                              std::unordered_set<std::string>(value_sets[i].begin(), value_sets[i].end()));
             }
         }
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     }
 
     r.affected = static_cast<int64_t>(matched.size());
@@ -936,9 +983,13 @@ SqlResult SqlExecutor::exec_delete(const DeleteStmt& s) {
         ProfileWriteGuard guard(_mgr, prof);
         for (const NSID& id : matched)
             prof->remove_enchantment(id);
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     } else if (s.table == "equipment") {
         for (const NSID& id : matched) {
             const std::string e = check_delete_equipment(*prof, id);
@@ -952,9 +1003,13 @@ SqlResult SqlExecutor::exec_delete(const DeleteStmt& s) {
         ProfileWriteGuard guard(_mgr, prof);
         for (const NSID& id : matched)
             prof->remove_equipment(id);
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     } else { // tags
         for (const NSID& id : matched) {
             const std::string e = check_delete_tag(*prof, id);
@@ -968,9 +1023,13 @@ SqlResult SqlExecutor::exec_delete(const DeleteStmt& s) {
         ProfileWriteGuard guard(_mgr, prof);
         for (const NSID& id : matched)
             prof->remove_tag(id);
+        // I3：push_undo 先于 commit（快照按值传入，guard 未提交时仍可恢复）。
+        push_undo(_current, guard.snapshot);
         guard.commit();
-        push_undo(_current, std::move(guard.snapshot));
-        _mgr.notify_mutated();
+        try {
+            _mgr.notify_mutated();
+        } catch (...) {
+        }
     }
 
     r.affected = static_cast<int64_t>(matched.size());
@@ -999,7 +1058,11 @@ bool SqlExecutor::undo(std::string& err) {
         return false;
     }
     *prof = *entry.snapshot; // 恢复克隆（含 TagResolver 快照）
-    _mgr.notify_mutated();
+    // I3：恢复后 bookkeeping 同样不得让异常逃逸。
+    try {
+        _mgr.notify_mutated();
+    } catch (...) {
+    }
     return true;
 }
 
@@ -1109,7 +1172,11 @@ SqlResult SqlExecutor::exec_select(const SelectStmt& s) {
     const int64_t total = static_cast<int64_t>(rows.size());
     const int64_t start = s.offset > 0 ? s.offset : 0;
     int64_t end = total;
-    if (s.limit >= 0 && start + s.limit < end)
+    // I4（终审）：避免 `start + s.limit` 有符号溢出（OFFSET 接近 INT64_MAX 时
+    // 是 UB）。改用减法比较：`start < end` 短路保证 end - start 非负且不溢出
+    // （end/start 均非负）；仅当 limit 真小于余量时才做加法（此时
+    // start + limit < end <= total，必不溢出）。
+    if (s.limit >= 0 && start < end && static_cast<uint64_t>(s.limit) < static_cast<uint64_t>(end - start))
         end = start + s.limit;
 
     // 投影 + 组装结果。

@@ -97,8 +97,9 @@ private:
     std::string _profiles_dir;
     SqlExecutor _exec;
     std::unordered_set<std::string> _dirty;
-    std::unordered_map<std::string, Profile> _baselines; // 每脏 profile 一份克隆（SAVE 时重置）
-    std::vector<std::string> _write_history;             // 成功写语句的 profile 序（UNDO 配对）
+    std::unordered_map<std::string, Profile> _baselines;   // 每脏 profile 一份克隆（SAVE 时重置）
+    std::vector<std::string> _write_history;               // 成功写语句的 profile 序（UNDO 配对）
+    std::unordered_map<std::string, std::string> _claimed; // sanitized 文件名 → 认领 key（C2 碰撞守卫，会话生命周期）
 };
 
 } // namespace business::sql

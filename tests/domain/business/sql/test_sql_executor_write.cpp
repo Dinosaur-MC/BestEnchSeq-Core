@@ -54,10 +54,8 @@ TEST_CASE("sql_write_insert_fk_dangling") {
     const size_t eq_before = p.eq().size();
 
     // exclusive_set：一个有效 + 一个悬空 → 拒绝且列出缺失（零半写入）
-    auto r1 = run(
-        ex,
-        "INSERT INTO enchantment (id, name, exclusive_set, supported_items) "
-        "VALUES ('test:foo','Foo','minecraft:sharpness,minecraft:nope','#minecraft:swords');");
+    auto r1 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, exclusive_set, supported_items) "
+                      "VALUES ('test:foo','Foo',1,1,'minecraft:sharpness,minecraft:nope','#minecraft:swords');");
     expect(r1.affected == 0, "dangling exclusive_set rejected");
     expect(r1.message.find("minecraft:nope") != std::string::npos, "lists the missing ref");
     expect(r1.message.find("exclusive_set") != std::string::npos, "names the column");
@@ -65,16 +63,16 @@ TEST_CASE("sql_write_insert_fk_dangling") {
     expect(!p.ench().contains(NSID("test:foo")), "row not written");
 
     // supported_items：#tag 悬空 + 具体有效 → 只列悬空 #tag
-    auto r2 = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES "
-                      "('test:foo','Foo','#minecraft:no_such_tag,minecraft:diamond_sword');");
+    auto r2 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:foo','Foo',1,1,'#minecraft:no_such_tag,minecraft:diamond_sword');");
     expect(r2.affected == 0, "dangling supported_items rejected");
     expect(r2.message.find("#minecraft:no_such_tag") != std::string::npos, "lists dangling tag ref");
     expect(r2.message.find("minecraft:diamond_sword") == std::string::npos, "valid ref not listed");
     expect(p.ench().size() == ench_before, "no write");
 
     // supported_items：具体物品悬空
-    auto r3 =
-        run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:foo','Foo','minecraft:no_such_item');");
+    auto r3 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:foo','Foo',1,1,'minecraft:no_such_item');");
     expect(r3.affected == 0 && r3.message.find("minecraft:no_such_item") != std::string::npos, "lists dangling concrete item");
 
     // equipment.category 悬空
@@ -96,22 +94,23 @@ TEST_CASE("sql_write_insert_defaults_and_lists") {
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
 
-    // 缺失列取 Profile 构造默认（supported_items 必填 → 显式给值）
-    auto r = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:foo','Foo','#minecraft:swords');");
+    // 缺失列取 Profile 构造默认（supported_items/max_level/multiplier 必填 → 显式给值）
+    auto r = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                     "VALUES ('test:foo','Foo',1,1,'#minecraft:swords');");
     expect(r.affected == 1, "insert affected 1");
     expect(r.message.find("1 row") != std::string::npos, "affected message");
     auto sel = run(ex, "SELECT id, name, supported_platform, max_level, is_treasure, exclusive_set, supported_items FROM "
                        "enchantment WHERE id='test:foo';");
     expect(sel.rows.size() == 1, "row written");
     expect(sel.rows[0][2] == "none", "platform default");
-    expect(sel.rows[0][3] == "0", "max_level default");
+    expect(sel.rows[0][3] == "1", "max_level from INSERT");
     expect(sel.rows[0][4] == "false", "treasure default");
     expect(sel.rows[0][5] == "", "exclusive_set default empty");
     expect(sel.rows[0][6] == "#minecraft:swords", "supported_items from INSERT");
 
     // 列表列：逗号拆分 → 逐项 NSID 化（'#' 保留）→ 读回排序拼接
-    auto r2 = run(ex, "INSERT INTO enchantment (id, name, exclusive_set, supported_items) VALUES "
-                      "('test:bar','Bar','minecraft:sharpness','#minecraft:swords,minecraft:diamond_sword');");
+    auto r2 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, exclusive_set, supported_items) VALUES "
+                      "('test:bar','Bar',1,1,'minecraft:sharpness','#minecraft:swords,minecraft:diamond_sword');");
     expect(r2.affected == 1, "list insert ok");
     auto sel2 = run(ex, "SELECT exclusive_set, supported_items FROM enchantment WHERE id='test:bar';");
     expect(sel2.rows[0][0] == "minecraft:sharpness", "exclusive_set roundtrip");
@@ -139,9 +138,50 @@ TEST_CASE("sql_write_insert_requires_supported_items") {
     expect(r2.message.find("supported_items") != std::string::npos, "error names supported_items");
 
     // 带有效 supported_items → 成功（对照）
-    auto r3 = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:ok','Ok','#minecraft:swords');");
+    auto r3 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:ok','Ok',1,1,'#minecraft:swords');");
     expect(r3.affected == 1, "valid supported_items accepted");
     TEST_PASS("insert requires supported_items");
+}
+
+// C1（终审）：max_level/multiplier 必填且 >=1（镜像 loader 不变量——否则
+// INSERT 缺省 0/0 会"SAVE 成功但 reload 静默丢行"）。
+
+TEST_CASE("sql_write_insert_requires_max_level_multiplier") {
+    ProfileManager mgr = make_vanilla();
+    const auto& p = *mgr.find("builtin:vanilla");
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+    const size_t before = p.ench().size();
+
+    // INSERT 省略 max_level/multiplier（缺省 0/0）→ 拒绝，错误点名 max_level
+    auto r1 = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES "
+                      "('test:no_ml','NoMl','#minecraft:swords');");
+    expect(r1.affected == 0, "omitted max_level/multiplier rejected");
+    expect(r1.message.find("max_level") != std::string::npos, "error mentions max_level");
+    expect(r1.message.find("multiplier") != std::string::npos, "error mentions multiplier");
+    expect(p.ench().size() == before, "no write");
+    expect(!p.ench().contains(NSID("test:no_ml")), "row not written");
+
+    // 显式 max_level=0 → 拒绝
+    auto r2 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:ml0','Ml0',0,1,'#minecraft:swords');");
+    expect(r2.affected == 0, "max_level=0 rejected");
+    expect(r2.message.find("max_level") != std::string::npos, "error mentions max_level");
+
+    // 显式 multiplier=0 → 拒绝
+    auto r3 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:mul0','Mul0',1,0,'#minecraft:swords');");
+    expect(r3.affected == 0, "multiplier=0 rejected");
+    expect(r3.message.find("multiplier") != std::string::npos, "error mentions multiplier");
+
+    // 合法（两者 >=1）→ 成功
+    auto r4 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:ok_ml','OkMl',3,2,'#minecraft:swords');");
+    expect(r4.affected == 1, "valid max_level/multiplier accepted");
+    auto chk = run(ex, "SELECT max_level, multiplier FROM enchantment WHERE id='test:ok_ml';");
+    expect(chk.rows[0][0] == "3" && chk.rows[0][1] == "2", "values roundtrip");
+    TEST_PASS("insert requires max_level/multiplier");
 }
 
 TEST_CASE("sql_write_update_requires_supported_items") {
@@ -164,13 +204,52 @@ TEST_CASE("sql_write_update_requires_supported_items") {
     TEST_PASS("update requires supported_items");
 }
 
+// C1（终审）：UPDATE 的 max_level/multiplier 校验是 delta-only——仅当 SET 触碰
+// 该列时校验新值 >=1；未触碰的列（既有值）不重校验。
+
+TEST_CASE("sql_write_update_requires_max_level_multiplier_delta") {
+    ProfileManager mgr = make_vanilla();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+
+    // SET max_level=0 → 拒绝，原值保留
+    auto bad = run(ex, "UPDATE enchantment SET max_level=0 WHERE id='minecraft:sharpness';");
+    expect(bad.affected == 0, "max_level=0 update rejected");
+    expect(bad.message.find("max_level") != std::string::npos, "error mentions max_level");
+    auto chk = run(ex, "SELECT max_level FROM enchantment WHERE id='minecraft:sharpness';");
+    expect(chk.rows[0][0] == "5", "max_level unchanged on rejection");
+
+    // SET multiplier=0 → 拒绝，原值保留
+    auto bad2 = run(ex, "UPDATE enchantment SET multiplier=0 WHERE id='minecraft:sharpness';");
+    expect(bad2.affected == 0, "multiplier=0 update rejected");
+    expect(bad2.message.find("multiplier") != std::string::npos, "error mentions multiplier");
+    auto chk2 = run(ex, "SELECT multiplier FROM enchantment WHERE id='minecraft:sharpness';");
+    expect(chk2.rows[0][0] == "1", "multiplier unchanged on rejection");
+
+    // 只改 max_level（multiplier 未触碰）→ 成功（delta-only：不重校验 multiplier）
+    auto ok = run(ex, "UPDATE enchantment SET max_level=4 WHERE id='minecraft:sharpness';");
+    expect(ok.affected == 1, "max_level-only update ok");
+    auto chk3 = run(ex, "SELECT max_level, multiplier FROM enchantment WHERE id='minecraft:sharpness';");
+    expect(chk3.rows[0][0] == "4" && chk3.rows[0][1] == "1", "only max_level changed");
+
+    // 只改 multiplier → 成功
+    auto ok2 = run(ex, "UPDATE enchantment SET multiplier=2 WHERE id='minecraft:sharpness';");
+    expect(ok2.affected == 1, "multiplier-only update ok");
+
+    // 非数值列 UPDATE（不触碰 max_level/multiplier）→ 成功
+    auto ok3 = run(ex, "UPDATE enchantment SET name='Renamed' WHERE id='minecraft:sharpness';");
+    expect(ok3.affected == 1, "non-numeric update ok");
+    TEST_PASS("update requires max_level/multiplier (delta-only)");
+}
+
 TEST_CASE("sql_write_insert_duplicate_rejected") {
     ProfileManager mgr = make_vanilla();
     const auto& p = *mgr.find("builtin:vanilla");
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
     const size_t before = p.ench().size();
-    auto r = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('minecraft:sharpness','X','#minecraft:swords');");
+    auto r =
+        run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('minecraft:sharpness','X','#minecraft:swords');");
     expect(r.affected == 0, "duplicate rejected");
     expect(!r.message.empty(), "error message");
     expect(p.ench().size() == before, "no write");
@@ -257,15 +336,16 @@ TEST_CASE("sql_write_delete_reverse_reference") {
     expect(p.ench().contains(NSID("minecraft:sharpness")), "still present");
 
     // 自插引用行后再删 equipment（supported_items 具体引用）→ 拒绝并列来源
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES "
-            "('test:uses_sword','UsesSword','minecraft:diamond_sword');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:uses_sword','UsesSword',1,1,'minecraft:diamond_sword');");
     auto r2 = run(ex, "DELETE FROM equipment WHERE id='minecraft:diamond_sword';");
     expect(r2.affected == 0, "equipment delete rejected");
     expect(r2.message.find("test:uses_sword") != std::string::npos, "lists the referencing enchantment");
     expect(p.eq().contains(NSID("minecraft:diamond_sword")), "still present");
 
     // 自插引用行后再删 tag（supported_items #引用）→ 拒绝并列来源
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:uses_tag','UsesTag','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:uses_tag','UsesTag',1,1,'#minecraft:swords');");
     auto r3 = run(ex, "DELETE FROM tags WHERE id='#minecraft:swords';");
     expect(r3.affected == 0, "tag delete rejected");
     expect(r3.message.find("test:uses_tag") != std::string::npos, "lists the referencing enchantment");
@@ -279,7 +359,8 @@ TEST_CASE("sql_write_delete_valid") {
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
 
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:del','Del','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:del','Del',1,1,'#minecraft:swords');");
     auto r1 = run(ex, "DELETE FROM enchantment WHERE id='test:del';");
     expect(r1.affected == 1, "delete affected 1");
     expect(!p.ench().contains(NSID("test:del")), "row removed");
@@ -307,9 +388,12 @@ TEST_CASE("sql_write_where_filtering") {
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
 
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:a','A','#minecraft:swords');");
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:b','B','#minecraft:swords');");
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:c','C','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:a','A',1,1,'#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:b','B',1,1,'#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:c','C',1,1,'#minecraft:swords');");
 
     // WHERE 精确匹配子集
     auto up = run(ex, "UPDATE enchantment SET name='Renamed' WHERE id='test:b';");
@@ -339,18 +423,18 @@ TEST_CASE("sql_write_atomicity_no_half_write") {
 
     // INSERT：一个有效 + 一个无效引用 → 整句拒绝，零半写入，且不入 UNDO 栈
     const size_t before = p.ench().size();
-    auto r = run(
-        ex,
-        "INSERT INTO enchantment (id, name, exclusive_set, supported_items) "
-        "VALUES ('test:foo','Foo','minecraft:sharpness,minecraft:nope','#minecraft:swords');");
+    auto r = run(ex, "INSERT INTO enchantment (id, name, exclusive_set, supported_items) "
+                     "VALUES ('test:foo','Foo','minecraft:sharpness,minecraft:nope','#minecraft:swords');");
     expect(r.affected == 0, "rejected");
     expect(p.ench().size() == before, "no half-write");
     std::string err;
     expect(!ex.undo(err), "failed statement records no undo snapshot");
 
     // UPDATE 多行：引用变更先整体校验 → 任一行悬空则全部不写
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:u1','U1','#minecraft:swords');");
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:u2','U2','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:u1','U1',1,1,'#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:u2','U2',1,1,'#minecraft:swords');");
     auto r2 = run(ex, "UPDATE enchantment SET exclusive_set='minecraft:sharpness,minecraft:nope' WHERE true;");
     expect(r2.affected == 0, "multi-row update rejected");
     auto chk = run(ex, "SELECT exclusive_set FROM enchantment WHERE id='test:u1';");
@@ -359,7 +443,8 @@ TEST_CASE("sql_write_atomicity_no_half_write") {
     expect(chk2.rows[0][0] == "", "no second row changed");
 
     // DELETE 多行：一行有反向引用 → 整句拒绝，零部分删除
-    run(ex, "INSERT INTO enchantment (id, name, exclusive_set, supported_items) VALUES ('test:x','X','test:u1','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, exclusive_set, supported_items) VALUES "
+            "('test:x','X',1,1,'test:u1','#minecraft:swords');");
     auto r3 = run(ex, "DELETE FROM enchantment WHERE true;");
     expect(r3.affected == 0, "delete rejected");
     expect(p.ench().contains(NSID("test:u1")) && p.ench().contains(NSID("test:x")), "zero partial delete");
@@ -376,8 +461,10 @@ TEST_CASE("sql_undo_restores") {
     expect(!ex.undo(err), "empty stack: undo false");
     expect(!err.empty(), "empty stack: error set");
 
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:u1','U1','#minecraft:swords');");
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:u2','U2','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:u1','U1',1,1,'#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:u2','U2',1,1,'#minecraft:swords');");
     expect(ex.undo(err), "first undo");
     expect(!p.ench().contains(NSID("test:u2")), "u2 reverted");
     expect(p.ench().contains(NSID("test:u1")), "u1 kept");
@@ -386,9 +473,10 @@ TEST_CASE("sql_undo_restores") {
     expect(!ex.undo(err), "stack exhausted");
 
     // 失败语句不入栈：undo 仍回到上一次成功写
-    run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:ok','Ok','#minecraft:swords');");
-    run(ex, "INSERT INTO enchantment (id, name, exclusive_set, supported_items) "
-            "VALUES ('test:bad','Bad','minecraft:nope','#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:ok','Ok',1,1,'#minecraft:swords');");
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, exclusive_set, supported_items) "
+            "VALUES ('test:bad','Bad',1,1,'minecraft:nope','#minecraft:swords');");
     expect(ex.undo(err), "undo skips failed statement");
     expect(!p.ench().contains(NSID("test:ok")), "reverted to pre-ok state");
 
@@ -409,8 +497,8 @@ TEST_CASE("sql_undo_fifo_cap") {
     ex.set_current("builtin:vanilla");
 
     for (int i = 0; i < 17; ++i) {
-        auto r = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:u" + std::to_string(i) +
-                         "','U','#minecraft:swords');");
+        auto r = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES ('test:u" +
+                             std::to_string(i) + "','U',1,1,'#minecraft:swords');");
         expect(r.affected == 1, "write " + std::to_string(i));
     }
     // 栈容量 16：最早一次写（u0）的快照被 FIFO 淘汰
@@ -433,10 +521,12 @@ TEST_CASE("sql_undo_cross_profile") {
     ex.set_current("p2");
     // p2 为空 profile：先注册 supported_items 引用的 tag，使 INSERT 通过 FK 校验
     run(ex, "INSERT INTO tags (id, name, values) VALUES ('#minecraft:swords','swords','minecraft:sharpness');");
-    auto r1 = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:p2a','P2A','#minecraft:swords');");
+    auto r1 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:p2a','P2A',1,1,'#minecraft:swords');");
     expect(r1.affected == 1, "p2 insert");
     ex.set_current("builtin:vanilla");
-    auto r2 = run(ex, "INSERT INTO enchantment (id, name, supported_items) VALUES ('test:va','VA','#minecraft:swords');");
+    auto r2 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('test:va','VA',1,1,'#minecraft:swords');");
     expect(r2.affected == 1, "vanilla insert");
 
     // 最近一次成功写 = vanilla 上的写

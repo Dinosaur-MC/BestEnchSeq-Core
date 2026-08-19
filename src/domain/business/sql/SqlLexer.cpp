@@ -1,5 +1,7 @@
 #include "domain/business/sql/SqlLexer.h"
 
+#include <cctype>
+
 namespace business::sql {
 
 namespace {
@@ -85,8 +87,13 @@ SqlToken SqlLexer::next() {
         while (_pos < _src.size() && is_ident_char(_src[_pos]))
             ++_pos;
         std::string w(_src.substr(start, _pos - start));
-        if (w == "true" || w == "false")
-            return {SqlToken::Kind::bool_, w, 0};
+        // TRUE/FALSE 大小写不敏感（spec §2.2）：bool 关键字按小写文本比较，
+        // 并归一为小写 token 文本（执行器 parse_bool/哨兵只认 "true"/"false"）。
+        std::string lw = w;
+        for (char& ch : lw)
+            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (lw == "true" || lw == "false")
+            return {SqlToken::Kind::bool_, std::move(lw), 0};
         return {SqlToken::Kind::ident, std::move(w), 0};
     }
     error = std::string("unexpected character '") + c + "'";

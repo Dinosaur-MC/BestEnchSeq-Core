@@ -1,16 +1,16 @@
 #include "ProfileManager.h"
-#include "domain/business/components/LimitedLevelCalculator.h"
-#include "domain/business/components/RegistryHelper.h"
-#include "domain/business/components/Serializer.h"  // Profile << Json (snapshot)
-#include "domain/business/loaders/ProfileLoader.h"
-#include "domain/business/loaders/RegistryLoader.h"
-#include "domain/business/parsers/McOfficialParser.h"
-#include "domain/business/components/ItemProperties.h"
-#include "domain/business/loaders/BuiltinData.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 #include "common/utils/StringUtils.hpp"
+#include "domain/business/components/ItemProperties.h"
+#include "domain/business/components/LimitedLevelCalculator.h"
+#include "domain/business/components/RegistryHelper.h"
+#include "domain/business/components/Serializer.h" // Profile << Json (snapshot)
+#include "domain/business/loaders/BuiltinData.h"
+#include "domain/business/loaders/ProfileLoader.h"
+#include "domain/business/loaders/RegistryLoader.h"
+#include "domain/business/parsers/McOfficialParser.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -75,6 +75,7 @@ Profile& ProfileManager::create(const std::string& name) {
     auto p = std::make_unique<Profile>(name);
     Profile& ref = *p;
     _profiles[name] = std::move(p);
+    _datapack_sourced.erase(name); // 新建/占位的 profile 非 datapack 来源
     _effective_cache.clear();
     return ref;
 }
@@ -91,16 +92,19 @@ Profile& ProfileManager::create_from(const std::string& source, const std::strin
     auto p = std::make_unique<Profile>(src.clone(dest));
     Profile& ref = *p;
     _profiles[dest] = std::move(p);
+    _datapack_sourced.erase(dest); // 派生副本 = native 来源
     _effective_cache.clear();
     return ref;
 }
 
 bool ProfileManager::remove(const std::string& name) {
     auto it = _profiles.find(name);
-    if (it == _profiles.end()) return false;
+    if (it == _profiles.end())
+        return false;
 
     _profiles.erase(it);
-    _undo_log.erase(name);  // 清理该 profile 的 undo 历史
+    _undo_log.erase(name); // 清理该 profile 的 undo 历史
+    _datapack_sourced.erase(name);
 
     // Adjust active if needed
     if (_profiles.empty()) {
@@ -136,10 +140,12 @@ std::vector<std::string> ProfileManager::list() const {
 
 bool ProfileManager::_mutate(const std::string& profile, std::function<bool(Profile&)> op) {
     Profile* p = _find(profile);
-    if (!p) return false;
+    if (!p)
+        return false;
 
     // 应用前校验（实时）：数据本身已有效才允许编辑。
-    if (!RegistryHelper::validate(*p)) return false;
+    if (!RegistryHelper::validate(*p))
+        return false;
 
     // 快照（变更前状态）。
     Json before;
@@ -154,7 +160,7 @@ bool ProfileManager::_mutate(const std::string& profile, std::function<bool(Prof
 
     // 事后校验：失败则回滚到快照，不留脏状态。
     if (!RegistryHelper::validate(*p)) {
-        auto keep_resolver = p->tag_resolver_ptr();  // from_json 会重建 Profile，需保留 resolver
+        auto keep_resolver = p->tag_resolver_ptr(); // from_json 会重建 Profile，需保留 resolver
         p->from_json(_undo_log[profile].back().before);
         p->set_tag_resolver(std::move(keep_resolver));
         _undo_log[profile].pop_back();
@@ -197,7 +203,8 @@ bool ProfileManager::update_equipment(const std::string& profile, const Equipmen
     // Profile 只暴露 const eq()；经受控代理方法在同一事务内替换（remove+add），
     // _mutate 保证 validate-before/after + 快照/undo 语义不被破坏。
     return _mutate(profile, [&](Profile& p) {
-        if (!p.has_equipment(patch.id)) return false;
+        if (!p.has_equipment(patch.id))
+            return false;
         p.remove_equipment(patch.id);
         return p.add_equipment(patch);
     });
@@ -205,7 +212,8 @@ bool ProfileManager::update_equipment(const std::string& profile, const Equipmen
 
 bool ProfileManager::update_tag(const std::string& profile, const EquipmentTag& patch) {
     return _mutate(profile, [&](Profile& p) {
-        if (!p.tags().contains(patch.id)) return false;
+        if (!p.tags().contains(patch.id))
+            return false;
         p.remove_tag(patch.id);
         return p.add_tag(patch);
     });
@@ -216,7 +224,7 @@ bool ProfileManager::set_dependencies(const std::string& profile, std::vector<st
         auto prev = p.dependencies();
         p.set_dependencies(std::move(deps));
         _build_graph();
-        if (is_cyclic(profile)) {   // 引入环 → 恢复原依赖并拒绝（不留脏状态）
+        if (is_cyclic(profile)) { // 引入环 → 恢复原依赖并拒绝（不留脏状态）
             p.set_dependencies(prev);
             _build_graph();
             return false;
@@ -228,11 +236,16 @@ bool ProfileManager::set_dependencies(const std::string& profile, std::vector<st
 bool ProfileManager::rename(const std::string& old_name, const std::string& new_name) {
     // 改名本质是 map 键重排：直接操作 _profiles（不适用 _mutate 的
     // "profile 内变更"模型，不记快照/不可 undo）。map 键是 profile 身份。
-    if (!exists(old_name) || exists(new_name)) return false;
+    if (!exists(old_name) || exists(new_name))
+        return false;
     auto node = std::move(_profiles[old_name]);
     _profiles.erase(old_name);
     _profiles[new_name] = std::move(node);
-    if (_active == old_name) _active = new_name;
+    if (_active == old_name)
+        _active = new_name;
+    // datapack origin 随改名迁移
+    if (_datapack_sourced.erase(old_name))
+        _datapack_sourced.insert(new_name);
     _build_graph();
     _effective_cache.clear();
     return true;
@@ -241,7 +254,8 @@ bool ProfileManager::rename(const std::string& old_name, const std::string& new_
 bool ProfileManager::undo(const std::string& profile) {
     // 防御性顺序：先确认 profile 存在，再消费快照。
     Profile* p = _find(profile);
-    if (!p) return false;
+    if (!p)
+        return false;
 
     auto it = _undo_log.find(profile);
     if (it == _undo_log.end() || it->second.empty())
@@ -250,7 +264,7 @@ bool ProfileManager::undo(const std::string& profile) {
     auto before = std::move(it->second.back().before);
     it->second.pop_back();
 
-    auto keep_resolver = p->tag_resolver_ptr();  // from_json 会重建 Profile，需保留 resolver
+    auto keep_resolver = p->tag_resolver_ptr(); // from_json 会重建 Profile，需保留 resolver
     p->from_json(before);
     p->set_tag_resolver(std::move(keep_resolver));
     _effective_cache.clear();
@@ -289,9 +303,10 @@ Profile& ProfileManager::snapshot(const std::string& source, const std::string& 
 
     const Profile& src = *find(source);
     auto p = std::make_unique<Profile>(src.clone(snapshot_name));
-    p->set_version("snapshot");  // mark as snapshot
+    p->set_version("snapshot"); // mark as snapshot
     Profile& ref = *p;
     _profiles[snapshot_name] = std::move(p);
+    _datapack_sourced.erase(snapshot_name); // 派生副本 = native 来源
     _effective_cache.clear();
     return ref;
 }
@@ -310,6 +325,7 @@ Profile& ProfileManager::branch(const std::string& source, const std::string& br
     auto p = std::make_unique<Profile>(src.clone(branch_name));
     Profile& ref = *p;
     _profiles[branch_name] = std::move(p);
+    _datapack_sourced.erase(branch_name); // 派生副本 = native 来源
     _effective_cache.clear();
     return ref;
 }
@@ -317,7 +333,8 @@ Profile& ProfileManager::branch(const std::string& source, const std::string& br
 // ── Merge ─────────────────────────────────────────────────────────────
 
 void ProfileManager::merge(const std::string& source, const std::string& dest) {
-    if (source == dest) return;  // self-merge is no-op
+    if (source == dest)
+        return; // self-merge is no-op
     // Existence checks before dereferencing (matches create_from/snapshot/
     // branch; B-T14 I-2 — a missing source/dest would otherwise be a null-deref).
     if (!exists(source))
@@ -352,36 +369,42 @@ std::vector<std::string> ProfileManager::resolve_dependencies(const std::string&
     _build_graph();
 
     std::vector<std::string> order;
-    std::unordered_map<std::string, uint8_t> color;   // 0 白 1 灰 2 黑
+    std::unordered_map<std::string, uint8_t> color; // 0 白 1 灰 2 黑
     std::function<bool(const std::string&)> dfs = [&](const std::string& n) -> bool {
         color[n] = 1;
         auto it = _dep_graph.find(n);
         if (it != _dep_graph.end()) {
             for (const auto& d : it->second) {
-                if (color[d] == 1) return false;          // back edge → cycle
-                if (color[d] == 0 && !dfs(d)) return false;
+                if (color[d] == 1)
+                    return false; // back edge → cycle
+                if (color[d] == 0 && !dfs(d))
+                    return false;
             }
         }
         color[n] = 2;
         order.push_back(n);
         return true;
     };
-    if (_dep_graph.find(profile) == _dep_graph.end()) return {};
-    if (!dfs(profile)) return {};
-    order.pop_back();   // 去掉目标自身
+    if (_dep_graph.find(profile) == _dep_graph.end())
+        return {};
+    if (!dfs(profile))
+        return {};
+    order.pop_back(); // 去掉目标自身
     return order;
 }
 
 bool ProfileManager::_has_cycle(const std::string& start) const {
     // DFS 环检测：白/灰/黑三色标记；从 start 出发回到灰色节点（回边）即环。
-    std::unordered_map<std::string, uint8_t> color;   // 0 白 1 灰 2 黑
+    std::unordered_map<std::string, uint8_t> color; // 0 白 1 灰 2 黑
     std::function<bool(const std::string&)> dfs = [&](const std::string& n) -> bool {
         color[n] = 1;
         auto it = _dep_graph.find(n);
         if (it != _dep_graph.end()) {
             for (const auto& d : it->second) {
-                if (color[d] == 1) return true;            // back edge → cycle
-                if (color[d] == 0 && dfs(d)) return true;
+                if (color[d] == 1)
+                    return true; // back edge → cycle
+                if (color[d] == 0 && dfs(d))
+                    return true;
             }
         }
         color[n] = 2;
@@ -417,7 +440,7 @@ const Profile& ProfileManager::resolve_effective(const std::string& profile) con
         throw std::runtime_error("Profile '" + profile + "' has a dependency cycle");
     }
 
-    auto chain = resolve_dependencies(profile);   // 依赖在前，自身排除
+    auto chain = resolve_dependencies(profile);    // 依赖在前，自身排除
     auto eff = std::make_unique<Profile>(profile); // 空 Profile 起步
 
     // 收集参与合并的源：vanilla 隐式根（最低优先级）→ 依赖（拓扑序，下层在
@@ -452,9 +475,7 @@ const Profile& ProfileManager::resolve_effective(const std::string& profile) con
 
 // ── Effective view: profile group (composite) ─────────────────────────
 
-const Profile& ProfileManager::resolve_effective_group(
-    const std::vector<std::string>& members) const
-{
+const Profile& ProfileManager::resolve_effective_group(const std::vector<std::string>& members) const {
     // 与 resolve_effective 相同：先重建邻接表，直接 set_dependencies() 的
     // 变更会使缓存失效（B-T14 M-1）。
     _build_graph();
@@ -462,7 +483,8 @@ const Profile& ProfileManager::resolve_effective_group(
     // 缓存 key：逗号拼接（profile key 约定不含逗号）。
     std::string key;
     for (size_t i = 0; i < members.size(); ++i) {
-        if (i) key += ',';
+        if (i)
+            key += ',';
         key += members[i];
     }
     auto cache_it = _effective_cache.find(key);
@@ -490,8 +512,7 @@ const Profile& ProfileManager::resolve_effective_group(
 
     // 隐式 vanilla 注入（硬性步骤——datapack 成员无法声明 dependencies，其
     // vanilla base 完全依赖此注入；与 resolve_effective 的 B-T26 #20 一致）。
-    const bool has_vanilla =
-        std::find(expanded.begin(), expanded.end(), "builtin:vanilla") != expanded.end();
+    const bool has_vanilla = std::find(expanded.begin(), expanded.end(), "builtin:vanilla") != expanded.end();
     if (!has_vanilla && _find("builtin:vanilla"))
         expanded.insert(expanded.begin(), "builtin:vanilla");
 
@@ -552,12 +573,12 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
             // 重新 add 后须恢复，否则同名替换活动 profile 时选中丢失。
             const bool was_active = (_active == name);
             if (exists(name))
-                remove(name);  // replace-on-conflict
+                remove(name); // replace-on-conflict
             _profiles[name] = std::make_unique<Profile>(std::move(loaded));
+            _datapack_sourced.erase(name); // native 文件来源（替换 datapack origin）
             if (was_active)
                 _active = name;
-        } else if (entry.is_directory() &&
-                   std::filesystem::exists(path / "pack.mcmeta")) {
+        } else if (entry.is_directory() && std::filesystem::exists(path / "pack.mcmeta")) {
             // A datapack subdirectory — load it as a profile.
             load_datapack(path);
         }
@@ -603,8 +624,7 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
                 datapack_tags.insert({NSID("#" + tag.key), tag.key});
                 valid_item_tags.push_back(std::move(tag));
             } catch (const std::exception&) {
-                LOG_WARN("Skipping datapack item tag '%s': invalid tag id",
-                         tag.key.c_str());
+                LOG_WARN("Skipping datapack item tag '%s': invalid tag id", tag.key.c_str());
             }
         }
 
@@ -612,8 +632,7 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // temporary registries, cross-validate the datapack's DTOs on top, then
         // filter back to the datapack's own content.  The vanilla tag universe
         // is retained so `#tag` supported_items references resolve downstream.
-        auto own = RegistryLoader::resolve_own_content(
-            result.enchantments, result.equipment, &datapack_tags);
+        auto own = RegistryLoader::resolve_own_content(result.enchantments, result.equipment, &datapack_tags);
 
         // Build the TagResolver as vanilla ∪ datapack item tags, honoring each
         // tag file's "replace" flag (MC semantics): a datapack may override a
@@ -640,8 +659,7 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         const std::string name = derive_datapack_name(dir);
 
         // Construct the Profile.  own.tags now = vanilla ∪ datapack item tags.
-        Profile profile(ProfileMetadata(name), std::move(own.ench),
-                        std::move(own.eq), std::move(own.tags));
+        Profile profile(ProfileMetadata(name), std::move(own.ench), std::move(own.eq), std::move(own.tags));
         profile.set_tag_resolver(std::move(resolver));
 
         // ── COMMIT POINT ──  From here the manager is mutated; nothing below
@@ -654,13 +672,14 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // replace-on-conflict：remove() 会清空/改指活动选中，重新 add 后恢复
         const bool was_active = (_active == name);
         if (exists(name))
-            remove(name);  // replace-on-conflict
+            remove(name); // replace-on-conflict
         _profiles[name] = std::make_unique<Profile>(std::move(profile));
+        _datapack_sourced.insert(name); // datapack 目录来源（I5：SAVE 警告用）
         if (was_active)
             _active = name;
 
         _build_graph();
-        cross_validate(name);  // clears _effective_cache
+        cross_validate(name); // clears _effective_cache
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to load datapack from '%s': %s", dir.string().c_str(), e.what());
@@ -709,8 +728,7 @@ size_t ProfileManager::cross_validate(const std::string& profile) {
             continue;
         EnchInfo updated = info;
         bool changed = false;
-        for (auto it = updated.supported_items.begin();
-             it != updated.supported_items.end();) {
+        for (auto it = updated.supported_items.begin(); it != updated.supported_items.end();) {
             if (it->is_tag() ? universe_tags.count(*it) : universe_eq.count(*it)) {
                 ++it;
             } else {
@@ -736,8 +754,10 @@ size_t ProfileManager::cross_validate(const std::string& profile) {
 
 // ── Publish (flatten effective view + version/tag) ──────────────────────
 
-bool ProfileManager::publish(const std::string& profile, const std::string& version,
-                             const std::string& tag, const std::filesystem::path& out) {
+bool ProfileManager::publish(const std::string& profile,
+                             const std::string& version,
+                             const std::string& tag,
+                             const std::filesystem::path& out) {
     // 组合 key：逗号分隔成员（profile key 约定不含逗号），全部成员存在才有效。
     std::vector<std::string> members;
     for (const auto& seg : string_utils::split(profile, ',')) {
@@ -752,8 +772,7 @@ bool ProfileManager::publish(const std::string& profile, const std::string& vers
             return false;
 
     const bool is_group = members.size() > 1;
-    const Profile& eff = is_group ? resolve_effective_group(members)
-                                  : resolve_effective(members.front());
+    const Profile& eff = is_group ? resolve_effective_group(members) : resolve_effective(members.front());
     Json json = eff.to_json();
     // The effective view is metadata-stripped (built from registry merges), so
     // emit the source profile's human-friendly display_name explicitly when it
@@ -770,7 +789,8 @@ bool ProfileManager::publish(const std::string& profile, const std::string& vers
     if (!tag.empty())
         json.set("release_tag", Json(tag));
     std::ofstream f(out);
-    if (!f) return false;
+    if (!f)
+        return false;
     f << json.to_string(Json::Pretty);
     return true;
 }

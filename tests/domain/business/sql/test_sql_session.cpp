@@ -205,14 +205,18 @@ TEST_CASE("sql_session_save_roundtrip") {
     }
 
     // load_directory 回读：附魔 + tag（含 values）都还在
+    // （C1 回归门：显式 max_level/multiplier 的 INSERT → SAVE → reload 行存活；
+    //   旧代码对缺省 0/0 的 INSERT 报"saved"但 reload 静默丢行。）
     ProfileManager mgr2;
     mgr2.load_directory(tp.dir);
     const Profile* p = mgr2.find("p1");
     expect(p != nullptr, "reloaded profile exists");
     if (p) {
         expect(p->ench().contains(NSID("test:sqlmark")), "enchantment survives reload");
-        if (p->ench().contains(NSID("test:sqlmark")))
-            expect_eq(p->ench().at(NSID("test:sqlmark")).max_level, 1, "enchantment field survives reload");
+        if (p->ench().contains(NSID("test:sqlmark"))) {
+            expect_eq(p->ench().at(NSID("test:sqlmark")).max_level, 1, "enchantment max_level survives reload");
+            expect_eq(p->ench().at(NSID("test:sqlmark")).multiplier, 1, "enchantment multiplier survives reload");
+        }
         expect(p->tags().contains(NSID("#test:my_tag")), "tag row survives reload");
         const TagResolver* tr = p->tag_resolver();
         expect(tr != nullptr, "resolver attached after reload");
@@ -319,4 +323,126 @@ TEST_CASE("sql_session_save_windows_filename_sanitize") {
 
     tp.cleanup();
     TEST_PASS("save windows filename sanitize");
+}
+
+// ─── C2（终审）：文件名消毒碰撞守卫 ────────────────────────────────────
+// 'a:b' 与 'a_b' 消毒后都映射到 a_b.json——后写者会静默覆盖前者。SAVE 必须
+// 拒绝并指名两个 key；先写者的文件不得被覆盖。
+
+TEST_CASE("sql_session_save_collision") {
+    auto tp = make_temp_profiles({"p1"});
+    auto& pa = tp.mgr.create("a:b");
+    pa.add_tag({NSID("#minecraft:swords"), "swords"});
+    auto& pb = tp.mgr.create("a_b");
+    pb.add_tag({NSID("#minecraft:swords"), "swords"});
+
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("a:b");
+    auto r1 = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                     "VALUES ('test:ca','CA',1,1,'#minecraft:swords');");
+    expect(r1.affected == 1, "write on a:b ok");
+    s.use("a_b");
+    auto r2 = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                     "VALUES ('test:cb','CB',1,1,'#minecraft:swords');");
+    expect(r2.affected == 1, "write on a_b ok");
+    expect(s.dirty_profiles() == (std::vector<std::string>{"a:b", "a_b"}), "both dirty");
+
+    // SAVE ALL：排序后 a:b 先写 a_b.json（'a:b' < 'a_b'），a_b 撞同一文件名 →
+    // 报错指名两个 key 与文件名
+    auto sv = s.save(true);
+    expect(sv.message.find("save collision") != std::string::npos, "collision error");
+    expect(sv.message.find("a:b") != std::string::npos, "error names the first key");
+    expect(sv.message.find("a_b") != std::string::npos, "error names the second key");
+    expect(sv.message.find("a_b.json") != std::string::npos, "error names the colliding file");
+
+    // 未静默覆盖：a_b.json 存在且内容 = a:b（先写者胜；后写者被拒）
+    const std::filesystem::path f = std::filesystem::path(tp.dir) / "a_b.json";
+    expect(std::filesystem::exists(f), "first file exists");
+    if (std::filesystem::exists(f)) {
+        Json root = Json::parse(read_file_str(f));
+        expect_eq(root["name"].as<std::string>(), "a:b", "file holds the first key, not overwritten");
+    }
+
+    // a_b 保持脏；会话内再次 SAVE（单 key）同样被认领表拒绝（session-lifetime）
+    expect(s.dirty_profiles() == std::vector<std::string>{"a_b"}, "colliding profile still dirty");
+    s.use("a_b");
+    auto sv2 = s.save(false);
+    expect(sv2.message.find("save collision") != std::string::npos, "session-lifetime collision on later SAVE");
+    expect(s.dirty_profiles() == std::vector<std::string>{"a_b"}, "still dirty after refused save");
+
+    tp.cleanup();
+    TEST_PASS("save collision");
+}
+
+// ─── I5（终审）：datapack 来源 profile 的 native SAVE 发警告 ─────────────
+// datapack 目录加载的 profile 保存为 native JSON 后，reload 时与 datapack
+// 目录构成双来源（同名文件 + 同名目录）→ 回读胜者不确定——SAVE 消息须带警告。
+
+TEST_CASE("sql_session_save_datapack_warning") {
+    // 最小 datapack：pack.mcmeta + 一个魔咒 + 引用 item tag
+    static int dp_counter = 0;
+    const std::string dp_name = "besq_sql_dp_" + std::to_string(++dp_counter);
+    auto dp = std::filesystem::temp_directory_path() / dp_name;
+    std::error_code ec;
+    std::filesystem::remove_all(dp, ec);
+    std::filesystem::create_directories(dp / "data" / "mytest" / "enchantment");
+    std::filesystem::create_directories(dp / "data" / "minecraft" / "tags" / "item");
+    {
+        std::ofstream f(dp / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dp / "data" / "mytest" / "enchantment" / "leeching.json");
+        f << R"({
+            "description": "Leeching",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 2,
+            "max_level": 3,
+            "min_cost": {"base": 5, "per_level_above_first": 5}
+        })";
+    }
+    {
+        std::ofstream f(dp / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    // profiles_dir：datapack 子目录（load_directory 会把带 pack.mcmeta 的目录
+    // 加载为 datapack profile，key = 目录名）
+    static int dir_counter = 0;
+    auto profiles_dir = std::filesystem::temp_directory_path() / ("besq_sql_dp_dir_" + std::to_string(++dir_counter));
+    std::filesystem::remove_all(profiles_dir, ec);
+    std::filesystem::create_directories(profiles_dir);
+    std::filesystem::copy(dp, profiles_dir / dp.filename(), std::filesystem::copy_options::recursive);
+
+    ProfileManager mgr;
+    mgr.load_directory(profiles_dir);
+    const std::string key = dp.filename().string();
+    expect(mgr.exists(key), "datapack profile loaded");
+    expect(mgr.is_datapack_sourced(key), "manager marks datapack origin");
+    expect(!mgr.is_datapack_sourced("builtin:vanilla"), "vanilla root is not datapack-sourced");
+
+    SqlSession s(mgr, profiles_dir.string());
+    s.use(key);
+    auto w = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                    "VALUES ('mytest:extra','Extra',1,1,'#minecraft:swords');");
+    expect(w.affected == 1, "write on datapack profile ok");
+    auto sv = s.save(false);
+    expect(sv.message.find("saved: " + key) != std::string::npos, "save succeeds");
+    expect(sv.message.find("datapack-sourced") != std::string::npos, "warning names datapack origin");
+    expect(sv.message.find(key) != std::string::npos, "warning names the profile");
+    expect(s.dirty_profiles().empty(), "saved → clean");
+
+    // 对照组：native profile 的 SAVE 不带警告
+    auto tp = make_temp_profiles({"p1"});
+    SqlSession s2(tp.mgr, tp.dir);
+    s2.use("p1");
+    run(s2, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:na','Na',1,1,'#minecraft:swords');");
+    auto sv2 = s2.save(false);
+    expect(sv2.message.find("datapack-sourced") == std::string::npos, "native save has no warning");
+    tp.cleanup();
+
+    std::filesystem::remove_all(dp, ec);
+    std::filesystem::remove_all(profiles_dir, ec);
+    TEST_PASS("save datapack warning");
 }

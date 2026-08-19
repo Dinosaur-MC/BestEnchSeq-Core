@@ -154,22 +154,43 @@ SqlResult SqlSession::save(bool all) {
     }
 
     std::vector<std::string> saved;
+    std::vector<std::string> warnings;
     for (const std::string& name : targets) {
         const Profile* p = _mgr.find(name);
         if (!p) { // 脏 profile 已被外部移除 → 无法保存，直接清脏跳过
             _dirty.erase(name);
             continue;
         }
-        const std::filesystem::path path = std::filesystem::path(_profiles_dir) / (sanitize_filename(name) + ".json");
+        // C2（终审）：文件名消毒碰撞守卫——两个不同 key 消毒后映射到同一文件
+        // （如 'a:b' 与 'a_b' → a_b.json），后写者会静默覆盖前者的持久化内容
+        // （load_directory 按文件内 name 回读，后写者胜 → 前一个 profile 内容
+        // 丢失）。会话内认领表记录每个已写文件名 → key：同 key 重写放行；
+        // 不同 key 撞同一文件名 → 本语句失败并指名两个 key。
+        const std::string fname = sanitize_filename(name) + ".json";
+        const auto claim = _claimed.find(fname);
+        if (claim != _claimed.end() && claim->second != name) {
+            r.message = "save collision: '" + claim->second + "' and '" + name + "' both map to '" + fname + "'";
+            return r;
+        }
+        const std::filesystem::path path = std::filesystem::path(_profiles_dir) / fname;
         if (!write_profile_file(path, *p)) {
             r.message = "save failed: " + path.string(); // 保持脏
             return r;
         }
+        _claimed[fname] = name; // 本会话认领该文件名（同 key 重写仅刷新认领）
+        // I5（终审）：datapack 来源 profile 的 native SAVE 与 reload 时其
+        // datapack 目录构成双来源（同名文件 + 同名目录 → 回读胜者不确定），
+        // 发警告不拦阻。
+        if (_mgr.is_datapack_sourced(name))
+            warnings.push_back("warning: '" + name +
+                               "' is datapack-sourced; native save may collide with its datapack dir on reload");
         _dirty.erase(name);
         _baselines[name] = clone_with_resolver(*p); // 重置基线
         saved.push_back(name);
     }
     r.message = saved.empty() ? std::string("nothing to save") : "saved: " + join(saved, ", ");
+    if (!warnings.empty())
+        r.message += "\n" + join(warnings, "\n");
     return r;
 }
 

@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /// Derive a datapack profile name, returned VERBATIM (B-T13: profile keys are
@@ -147,11 +148,16 @@ public:
     /// resolve_effective 会返回陈旧视图。
     void notify_mutated() const { _effective_cache.clear(); }
 
+    /// 该 profile 是否由 datapack 目录加载（Profile 无持久化 format 元数据字段，
+    /// origin 在加载期由 manager 记录）。SQL 层 SAVE 用它发"native save 可能与
+    /// datapack 目录冲突"警告（spec §4.0）。
+    bool is_datapack_sourced(const std::string& name) const { return _datapack_sourced.count(name) != 0; }
+
     // ── Publish ────────────────────────────────────────────────────────
 
     /// 版本化发布：拍平有效视图为自包含 profile 文件（内嵌 version/tag）。
-    bool publish(const std::string& profile, const std::string& version,
-                 const std::string& tag, const std::filesystem::path& out);
+    bool
+    publish(const std::string& profile, const std::string& version, const std::string& tag, const std::filesystem::path& out);
 
 private:
     Profile* _find(const std::string& name);
@@ -170,12 +176,13 @@ private:
     bool _has_cycle(const std::string& start) const;
 
     struct Snapshot {
-        Json before;  // pre-change profile state (Json round-trip)
+        Json before; // pre-change profile state (Json round-trip)
     };
-    std::unordered_map<std::string, std::vector<Snapshot>> _undo_log;  // 每个 profile 的变更历史
+    std::unordered_map<std::string, std::vector<Snapshot>> _undo_log; // 每个 profile 的变更历史
 
     std::unordered_map<std::string, std::unique_ptr<Profile>> _profiles;
-    mutable std::unordered_map<std::string, std::vector<std::string>> _dep_graph;  // 邻接表
+    mutable std::unordered_map<std::string, std::vector<std::string>> _dep_graph; // 邻接表
     mutable std::unordered_map<std::string, std::unique_ptr<Profile>> _effective_cache;
+    std::unordered_set<std::string> _datapack_sourced; // 由 load_datapack 创建/替换的 profile key
     std::string _active;
 };

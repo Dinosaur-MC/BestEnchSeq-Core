@@ -134,6 +134,31 @@ TEST_CASE("sql_limit_offset") {
     TEST_PASS("limit offset");
 }
 
+// I4（终审）：LIMIT/OFFSET 有符号溢出 UB——`start + s.limit` 在 OFFSET 接近
+// INT64_MAX 时溢出。修正（减法比较 + uint64 钳制）后不得崩溃，结果合理：
+// 巨大 LIMIT + OFFSET 1 → 全量（减首行）；LIMIT 1 + 巨大 OFFSET → 空。
+
+TEST_CASE("sql_limit_offset_extreme_no_overflow") {
+    ProfileManager mgr = make_vanilla();
+    const auto& p = *mgr.find("builtin:vanilla");
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+
+    // LIMIT 接近 INT64_MAX + OFFSET 1：旧代码 start+limit 溢出（UB）；新代码
+    // 返回全部行减首行（limit 远超余量 → 不截断）。
+    auto r1 = ex.execute(std::get<SelectStmt>(
+        SqlParser{}.parse("SELECT id FROM enchantment ORDER BY id LIMIT 9223372036854775807 OFFSET 1;")[0]));
+    expect(r1.rows.size() == p.ench().size() - 1, "huge limit + offset 1: all but first row");
+    expect(r1.rows[0][0] == "minecraft:bane_of_arthropods", "first returned row is the second row");
+
+    // 病理形态（finding 原例）：OFFSET 接近 INT64_MAX + LIMIT 1 → 空结果，不崩溃。
+    auto r2 = ex.execute(std::get<SelectStmt>(
+        SqlParser{}.parse("SELECT id FROM enchantment ORDER BY id LIMIT 1 OFFSET 9223372036854775807;")[0]));
+    expect(r2.rows.empty(), "extreme offset: sane empty result");
+    expect(r2.message.empty(), "extreme offset: no error");
+    TEST_PASS("limit offset extreme no overflow");
+}
+
 TEST_CASE("sql_column_projection_and_lists") {
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");
@@ -179,6 +204,34 @@ TEST_CASE("sql_tags_table") {
     TEST_PASS("tags table");
 }
 
+// spec §2.2：列名大小写不敏感（解析期归一为小写）+ TRUE/FALSE 大小写不敏感
+// ——端到端门：大写列名与 WHERE TRUE 都能执行。
+
+TEST_CASE("sql_case_insensitive_columns_and_bool") {
+    ProfileManager mgr = make_vanilla();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+
+    // SELECT MAX_LEVEL（大写）→ 解析归一为 max_level → 正常投影
+    auto r = ex.execute(
+        std::get<SelectStmt>(SqlParser{}.parse("SELECT MAX_LEVEL FROM enchantment WHERE ID='minecraft:sharpness';")[0]));
+    expect(r.headers.size() == 1 && r.headers[0] == "max_level", "uppercase column resolves to header");
+    expect(r.rows.size() == 1 && r.rows[0][0] == "5", "uppercase column value");
+
+    // WHERE TRUE（大写）→ 哨兵匹配全部行
+    auto r2 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse("SELECT id FROM enchantment WHERE TRUE LIMIT 3;")[0]));
+    expect(r2.rows.size() == 3, "uppercase TRUE sentinel works");
+
+    // 大写写路径：INSERT 列名 + WHERE 列名
+    auto w = ex.execute(
+        std::get<InsertStmt>(SqlParser{}.parse("INSERT INTO ENCHANTMENT (ID, NAME, MAX_LEVEL, MULTIPLIER, SUPPORTED_ITEMS) "
+                                               "VALUES ('test:up','Up',1,1,'#minecraft:swords');")[0]));
+    expect(w.affected == 1, "uppercase insert ok");
+    auto w2 = ex.execute(std::get<UpdateStmt>(SqlParser{}.parse("UPDATE ENCHANTMENT SET MAX_LEVEL=2 WHERE ID='test:up';")[0]));
+    expect(w2.affected == 1, "uppercase update ok");
+    TEST_PASS("case insensitive columns and bool");
+}
+
 TEST_CASE("sql_unknown_column_error") {
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");
@@ -205,7 +258,8 @@ TEST_CASE("sql_write_statements_deferred") {
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
-    auto stmts = SqlParser{}.parse("INSERT INTO enchantment (id, name, supported_items) VALUES ('a:b','AB','#minecraft:swords');"
+    auto stmts = SqlParser{}.parse("INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                                   "VALUES ('a:b','AB',1,1,'#minecraft:swords');"
                                    "UPDATE equipment SET max_durability=1 WHERE id='x';"
                                    "DELETE FROM tags WHERE id='#x:y';"
                                    "STATUS;"

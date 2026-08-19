@@ -75,7 +75,9 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
                         fail("expected column");
                         break;
                     }
-                    s.cols.push_back(take().text);
+                    // 列名大小写不敏感（spec §2.2）：解析期归一为小写，执行器按
+                    // 小写列元数据匹配。
+                    s.cols.push_back(lower(take().text));
                     if (peek().kind == SqlToken::Kind::comma) {
                         take();
                         continue;
@@ -149,7 +151,7 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
                     fail("expected column name");
                     break;
                 }
-                s.cols.push_back(take().text);
+                s.cols.push_back(lower(take().text));
                 if (peek().kind == SqlToken::Kind::comma) {
                     take();
                     continue;
@@ -213,7 +215,7 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
                     fail("expected column");
                     break;
                 }
-                std::string col = take().text;
+                std::string col = lower(take().text);
                 if (peek().kind != SqlToken::Kind::eq) {
                     fail("expected =");
                     break;
@@ -323,7 +325,7 @@ std::vector<WhereCond> SqlParser::parse_where() {
             break;
         }
         WhereCond c;
-        c.col = take().text;
+        c.col = lower(take().text);
         if (peek().kind != SqlToken::Kind::eq) {
             fail("expected = in condition");
             break;
