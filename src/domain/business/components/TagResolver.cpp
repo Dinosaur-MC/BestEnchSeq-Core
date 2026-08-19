@@ -200,6 +200,14 @@ const std::unordered_set<std::string> *TagResolver::get_tag(
 }
 
 // ---------------------------------------------------------------------------
+// raw_values  --  read-only raw tag values (SQL FK reverse-reference checks)
+// ---------------------------------------------------------------------------
+const std::vector<TagValue> *TagResolver::raw_values(const std::string &key) const {
+    auto it = _raw_tags.find(key);
+    return (it != _raw_tags.end()) ? &it->second : nullptr;
+}
+
+// ---------------------------------------------------------------------------
 // add_tag  --  backward-compatible overload
 // ---------------------------------------------------------------------------
 void TagResolver::add_tag(

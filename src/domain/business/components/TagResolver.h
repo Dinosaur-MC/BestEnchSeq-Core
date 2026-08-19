@@ -56,6 +56,12 @@ class TagResolver {
     /// Resolves on-the-fly; threads through the mutable cache.
     const std::unordered_set<std::string> *get_tag(const std::string &ns, const std::string &name) const;
 
+    /// Read-only raw-value access for a tag key ("ns:name", no '#' — same
+    /// convention as get_tag).  Returns nullptr when the tag is not defined.
+    /// Used by the SQL write surface for FK reverse-reference checks
+    /// (slice-1 spec 6c/6j: DELETE 反向引用与 values 写校验需要原始值视图).
+    const std::vector<TagValue> *raw_values(const std::string &key) const;
+
     /// True when no raw tags are registered (snapshot resolvers built from
     /// requests that reference no `#` tags).  Callers fall back to
     /// category-derived tags when empty.

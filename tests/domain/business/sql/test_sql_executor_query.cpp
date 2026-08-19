@@ -200,6 +200,8 @@ TEST_CASE("sql_unknown_profile_error") {
 }
 
 TEST_CASE("sql_write_statements_deferred") {
+    // 片 1 写面在 Task 3 落地：INSERT/UPDATE/DELETE 已真实执行（语义矩阵见
+    // test_sql_executor_write）；STATUS/SAVE 仍由 Task 4 的 SqlSession 提供。
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
@@ -208,11 +210,15 @@ TEST_CASE("sql_write_statements_deferred") {
                                    "DELETE FROM tags WHERE id='#x:y';"
                                    "STATUS;"
                                    "SAVE ALL;");
-    expect(stmts.size() == 5, "five write statements parsed");
-    for (const auto& st : stmts) {
-        auto r = ex.execute(st);
-        expect(r.headers.empty() && r.rows.empty(), "no result rows for write");
-        expect(r.message.find("Task 3") != std::string::npos, "write statements land in Task 3");
-    }
-    TEST_PASS("write statements deferred");
+    expect(stmts.size() == 5, "five statements parsed");
+    expect(ex.execute(stmts[0]).affected == 1, "INSERT executes with 1 row affected");
+    expect(ex.execute(stmts[1]).affected == 0, "UPDATE no-match executes with 0 affected");
+    expect(ex.execute(stmts[2]).affected == 0, "DELETE no-match executes with 0 affected");
+    auto st = ex.execute(stmts[3]);
+    expect(st.headers.empty() && st.rows.empty(), "STATUS empty result");
+    expect(st.message.find("Task 4") != std::string::npos, "STATUS lands in Task 4");
+    auto sv = ex.execute(stmts[4]);
+    expect(sv.headers.empty() && sv.rows.empty(), "SAVE empty result");
+    expect(sv.message.find("Task 4") != std::string::npos, "SAVE lands in Task 4");
+    TEST_PASS("write statements land in Task 3/4");
 }
