@@ -583,3 +583,42 @@ TEST_CASE("sql_session_merge_dirty") {
     tp.cleanup();
     TEST_PASS("merge dirty");
 }
+
+// ─── F7（终审，回归锁）：0 行 COPY 不标脏 / MERGE 缺 dest 不标脏 ─────────
+// 脏门 = `r.affected > 0`：0 行 COPY 与失败 MERGE 都不应污染会话脏集合
+// （也不得产生写序配对）。
+
+TEST_CASE("sql_session_zero_row_copy_not_dirty") {
+    auto tp = make_temp_profiles({"p1", "p2"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+
+    // 源 p2 / 目标 p1 均无 enchantment 行；WHERE id='no_such' 匹配 0 行。
+    auto r = run(s, "COPY * FROM p2 INTO enchantment WHERE id='no_such';");
+    expect_eq(r.message, "0 row(s) affected", "zero-row copy message");
+    expect(r.affected == 0, "zero-row copy affects 0");
+    expect(s.dirty_profiles().empty(), "0-row COPY does not mark target dirty");
+
+    // 对照：真实写入仍标脏（脏门未被误改）。
+    auto w = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                    "VALUES ('test:z','Z',1,1,'#minecraft:swords');");
+    expect(w.affected == 1, "control insert ok");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p1"}, "real write still marks dirty");
+
+    tp.cleanup();
+    TEST_PASS("zero row copy not dirty");
+}
+
+TEST_CASE("sql_session_merge_missing_dest_not_dirty") {
+    auto tp = make_temp_profiles({"p1"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+
+    auto m = run(s, "MERGE INTO no_such FROM p1;");
+    expect_eq(m.message, "unknown profile 'no_such'", "merge missing dest error message");
+    expect(m.affected == 0, "failed merge affects 0");
+    expect(s.dirty_profiles().empty(), "failed MERGE leaves dirty unchanged");
+
+    tp.cleanup();
+    TEST_PASS("merge missing dest not dirty");
+}

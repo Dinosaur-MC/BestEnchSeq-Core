@@ -659,6 +659,11 @@ void write_pending(Profile& p, const PendingRow& row, bool override, bool skip_i
             p.remove_equipment(row.id);
         p.add_equipment(row.eq);
     } else { // tags
+        // F3（终审，defer 文档化）：列子集不带 values 时（write_values=false），
+        // 注册表行仍被替换/新增，但目标 resolver 该 tag 的值保持不变——OVERRIDE
+        // 场景 = 陈旧旧值（与新行自身的空 values 不对称）；非 OVERRIDE 新增 = 无
+        // resolver 值（读回 ""）。与"只复制列出列"语义一致，属已知不对称，不做
+        // 行为变更。
         if (skip_if_exists && p.tags().contains(row.id))
             return;
         if (override && p.tags().contains(row.id))
@@ -1189,6 +1194,15 @@ SqlResult SqlExecutor::exec_copy(const CopyStmt& s) {
                 r.message = "unknown column '" + c + "'";
                 return r;
             }
+        // F1（终审，Important）：列子集必含 id——缺 id 的复制行写空 NSID key
+        // （reload 被静默丢弃，正属约束 6 要拒的类）。镜像 INSERT 的 has-id 检查
+        // （exec_insert：`INSERT requires the 'id' column`）；star 整行复制恒带 id，
+        // 不受影响。任何行构建/写入之前拒绝 → 语句级原子失败（零写入、零 undo）。
+        const bool has_id = std::find(s.cols.begin(), s.cols.end(), "id") != s.cols.end();
+        if (!has_id) {
+            r.message = "COPY requires the 'id' column in the column list";
+            return r;
+        }
     }
     for (const auto& w : s.where) {
         if (w.col.empty())
@@ -1236,9 +1250,9 @@ SqlResult SqlExecutor::exec_copy(const CopyStmt& s) {
             if (s.star) {
                 row.eq = src_eq;
             } else {
-                // 值初始化：Equipment::max_durability 无默认初始化器（默认构造为
-                // 未初始化垃圾值），显式归零使"缺列 = 目标默认 0"确定（域类型缺口，
-                // 见 T2 报告；不改 Equipment.h——不在本任务文件清单）。
+                // 列子集 = 默认构造 + 仅复制指定列；Equipment::max_durability 现带
+                // 默认初始化器 = 0（F2 终审，Equipment.h 一行），"缺列 = 目标默认 0"
+                // 确定。eq{} 值初始化保留（与 INSERT 路径一致，无害冗余）。
                 Equipment eq{};
                 const auto rrow = equipment_row(src_eq);
                 for (const auto& c : s.cols) {

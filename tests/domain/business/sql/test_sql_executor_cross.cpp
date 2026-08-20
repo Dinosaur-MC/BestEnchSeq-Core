@@ -396,6 +396,60 @@ TEST_CASE("sql_copy_subset_invariant") {
     TEST_PASS("copy subset invariant");
 }
 
+// F1（终审，Important）：COPY 列子集必含 id——缺 id 的复制行会写空 NSID key
+// （reload 被静默丢弃，正属约束 6 要拒的类）。镜像 INSERT 的 has-id 检查；
+// star 整行复制恒带 id，不受影响。失败语句级原子：零写入、零 undo 条目。
+// 预置 dst 引用目标使"本可成功的"列子集语句在修复前确实写出空 id 行（RED）。
+
+TEST_CASE("sql_copy_subset_requires_id") {
+    ProfileManager mgr = make_src_dst();
+    {
+        // 独立 setup executor：预置 dst 引用目标（严格档校验宇宙），使下列列子集
+        // 在修复前能通过 FK/不变量/冲突检查——只被新的 has-id 检查拦住；其
+        // INSERT 不入主栈，保证"失败语句零 undo 条目"断言干净。
+        SqlExecutor setup(mgr, "profiles");
+        setup.set_current("dst");
+        run(setup, "INSERT INTO tags (id, name, values) VALUES ('#test:weapons','Weapons','minecraft:test_sword');");
+        run(setup, "INSERT INTO equipment (id, name, category) VALUES ('minecraft:test_sword','TS','#test:weapons');");
+    }
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+
+    // enchantment：列子集含全部必要列（max_level/multiplier/supported_items）
+    // 但缺 id → 拒绝（否则写空 id 行）。
+    const size_t ench_before = mgr.find("dst")->ench().size();
+    auto r1 = run(ex, "COPY name, max_level, multiplier, supported_items FROM src INTO enchantment "
+                      "WHERE id='test:sword_ench';");
+    expect(r1.affected == 0 && r1.message == "COPY requires the 'id' column in the column list",
+           "enchantment subset without id rejected");
+    expect(mgr.find("dst")->ench().size() == ench_before, "no enchantment write");
+
+    // equipment：列子集缺 id → 拒绝。
+    const size_t eq_before = mgr.find("dst")->eq().size();
+    auto r2 = run(ex, "COPY name, category, max_durability FROM src INTO equipment "
+                      "WHERE id='minecraft:test_axe';");
+    expect(r2.affected == 0 && r2.message == "COPY requires the 'id' column in the column list",
+           "equipment subset without id rejected");
+    expect(mgr.find("dst")->eq().size() == eq_before, "no equipment write");
+
+    // tags：列子集缺 id → 拒绝。
+    const size_t tags_before = mgr.find("dst")->tags().size();
+    auto r3 = run(ex, "COPY name FROM src INTO tags WHERE id='#test:all';");
+    expect(r3.affected == 0 && r3.message == "COPY requires the 'id' column in the column list",
+           "tags subset without id rejected");
+    expect(mgr.find("dst")->tags().size() == tags_before, "no tag write");
+
+    // 失败语句原子：无 undo 条目。
+    std::string err;
+    expect(!ex.undo(err), "failed id-less COPY records no undo snapshot");
+
+    // star 不受影响（整行复制恒带 id）——对照：dst 已有引用目标 → 复制成功。
+    auto ok = run(ex, "COPY * FROM src INTO enchantment WHERE id='test:sword_ench';");
+    expect(ok.affected == 1, "star copy unaffected by id check");
+    expect(mgr.find("dst")->ench().contains(NSID("test:sword_ench")), "star copy row written with id");
+    TEST_PASS("copy subset requires id");
+}
+
 TEST_CASE("sql_copy_missing_profiles") {
     ProfileManager mgr = make_src_dst();
     SqlExecutor ex(mgr, "profiles");

@@ -154,6 +154,11 @@ SqlResult SqlSession::execute(const SqlStmt& stmt) {
 
 bool SqlSession::undo(std::string& err) {
     const bool ok = _exec.undo(err);
+    // F5（终审，defer 文档化）：executor undo 失败（配对 profile 被外部删除——
+    // SQL 面不可达，如 FORK 出的 profile 被外部移除后其 created 条目 remove 失败）
+    // 时 ok=false → _write_history 不弹栈 → 配对条目保留。下一次成功的 undo 会弹出
+    // 该幽灵名，与"实际被恢复的 profile"错配（标脏/清脏落错对象）。已知边界，
+    // 不做行为变更（外部删除非 SQL 可达路径）。
     if (ok && !_write_history.empty()) {
         // executor 的 UNDO 栈与 session 的写序同步（都只在成功写时入栈），
         // 弹栈目标 = 最近一次成功写的 profile。

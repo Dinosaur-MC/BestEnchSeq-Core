@@ -184,6 +184,30 @@ TEST_CASE("sql_write_insert_requires_max_level_multiplier") {
     TEST_PASS("insert requires max_level/multiplier");
 }
 
+// F2（终审，Important）：Equipment::max_durability 默认初始化器 = 0（Equipment.h
+// 一行）——INSERT 缺该列时持久化确定性 0（修复前为未初始化垃圾值，SELECT 可能
+// 读到任意栈残留）。断言精确 0（不靠运气）。
+
+TEST_CASE("sql_write_insert_equipment_default_max_durability") {
+    ProfileManager mgr = make_vanilla();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+
+    auto r = run(ex, "INSERT INTO equipment (id, name, category) VALUES "
+                     "('test:eq_default','EqDefault','#minecraft:swords');");
+    expect(r.affected == 1, "equipment insert without max_durability ok");
+    auto sel = run(ex, "SELECT max_durability FROM equipment WHERE id='test:eq_default';");
+    expect(sel.rows.size() == 1, "row present");
+    expect(sel.rows[0][0] == "0", "max_durability defaults to deterministic 0");
+    // 值稳定 0：显式 max_durability 写入不受默认初始化器影响（对照）。
+    auto r2 = run(ex, "INSERT INTO equipment (id, name, category, max_durability) VALUES "
+                      "('test:eq_explicit','EqExplicit','#minecraft:swords',777);");
+    expect(r2.affected == 1, "explicit max_durability insert ok");
+    auto sel2 = run(ex, "SELECT max_durability FROM equipment WHERE id='test:eq_explicit';");
+    expect(sel2.rows[0][0] == "777", "explicit value unaffected");
+    TEST_PASS("insert equipment default max_durability");
+}
+
 TEST_CASE("sql_write_update_requires_supported_items") {
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");

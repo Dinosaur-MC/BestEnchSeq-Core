@@ -12,7 +12,7 @@ struct Equipment : IJsonSerializable {
     NSID id;
     std::string name;
     NSID category;
-    int32_t max_durability;
+    int32_t max_durability = 0;
 
     Equipment() = default;
     Equipment(NSID id_, std::string name_, NSID category_, int32_t max_durability_)
