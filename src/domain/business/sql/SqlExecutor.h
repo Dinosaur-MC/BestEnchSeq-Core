@@ -55,6 +55,7 @@ private:
     SqlResult exec_insert(const InsertStmt& s);
     SqlResult exec_update(const UpdateStmt& s);
     SqlResult exec_delete(const DeleteStmt& s);
+    SqlResult exec_copy(const CopyStmt& s);
 
     struct UndoEntry {
         std::string profile;

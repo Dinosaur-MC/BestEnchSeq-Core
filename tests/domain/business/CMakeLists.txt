@@ -21,5 +21,6 @@ besq_test(test_business_schemas test_business_schemas.cpp)
 besq_test(test_sql_parser sql/test_sql_parser.cpp)
 besq_test(test_sql_executor_query sql/test_sql_executor_query.cpp)
 besq_test(test_sql_executor_write sql/test_sql_executor_write.cpp)
+besq_test(test_sql_executor_cross sql/test_sql_executor_cross.cpp)
 besq_test(test_sql_session sql/test_sql_session.cpp)
 

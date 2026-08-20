@@ -568,6 +568,115 @@ match_ids(const Profile& p, const std::string& table, const std::vector<ColDef>&
     return out;
 }
 
+// ── COPY（跨 profile）辅助：目标行缓冲 + 严格档缺失引用收集 + raw values ──
+
+/// 一条待写目标行（主行或依赖行）；tags 行的 values 走独立 raw 向量。
+struct PendingRow {
+    std::string table;
+    NSID id;
+    EnchInfo ench;
+    Equipment eq;
+    EquipmentTag tag;
+    std::vector<std::string> tag_values; // tags 行 raw values（'#' 引用保留）
+};
+
+bool table_contains(const Profile& p, const std::string& table, const NSID& id) {
+    if (table == "enchantment")
+        return p.ench().contains(id);
+    if (table == "equipment")
+        return p.eq().contains(id);
+    return p.tags().contains(id);
+}
+
+std::string row_kind(const std::string& table) {
+    if (table == "enchantment")
+        return "enchantment";
+    if (table == "equipment")
+        return "equipment";
+    return "tag";
+}
+
+/// tags 行 raw values（'#' 引用保留，含 #ref 链）→ 字符串向量（resolver add_tag 输入）。
+std::vector<std::string> raw_values_of(const Profile& p, const EquipmentTag& t) {
+    std::vector<std::string> out;
+    const TagResolver* tr = p.tag_resolver();
+    if (!tr)
+        return out;
+    const auto* raw = tr->raw_values(t.id.get_ns() + ":" + t.id.get_id());
+    if (!raw)
+        return out;
+    for (const auto& v : *raw) {
+        if (const auto* e = std::get_if<EntryRef>(&v))
+            out.push_back(e->id);
+        else if (const auto* t2 = std::get_if<TagRef>(&v))
+            out.push_back("#" + t2->key);
+    }
+    return out;
+}
+
+/// 严格档缺失引用收集：`<ref> (used by <row_id>.<field>)`（调用方排序保证稳定全量）。
+void collect_ench_missing(const Profile& p, const EnchInfo& e, std::vector<std::string>& out) {
+    for (const auto& id : e.exclusive_set)
+        if (!p.ench().contains(id))
+            out.push_back(id.str() + " (used by " + e.id.str() + ".exclusive_set)");
+    for (const auto& id : e.supported_items)
+        if (id.is_tag() ? !p.tags().contains(id) : !p.eq().contains(id))
+            out.push_back(id.str() + " (used by " + e.id.str() + ".supported_items)");
+}
+
+void collect_eq_missing(const Profile& p, const Equipment& eq, std::vector<std::string>& out) {
+    if (!p.tags().contains(eq.category))
+        out.push_back(eq.category.str() + " (used by " + eq.id.str() + ".category)");
+}
+
+/// tags.values：'#' 引用须在目标可解析（具体引用恒可解析）；缺失列 `#ref` 全量。
+void collect_tag_missing(const Profile& p,
+                         const NSID& tag_id,
+                         const std::vector<std::string>& values,
+                         std::vector<std::string>& out) {
+    const TagResolver* tr = p.tag_resolver();
+    for (const auto& v : values) {
+        if (v.empty() || v[0] != '#')
+            continue;
+        if (!tr || tr->resolve(v).empty())
+            out.push_back(v + " (used by " + tag_id.str() + ".values)");
+    }
+}
+
+/// 写一行到目标 profile：主行 override（replace：remove-then-add，id 保留）；
+/// 依赖行 skip_if_exists（已存在 → 跳过，不覆盖）；tags 行 values 走 resolver 替换。
+void write_pending(Profile& p, const PendingRow& row, bool override, bool skip_if_exists, bool write_values) {
+    if (row.table == "enchantment") {
+        if (skip_if_exists && p.ench().contains(row.id))
+            return;
+        if (override && p.ench().contains(row.id))
+            p.remove_enchantment(row.id);
+        p.add_enchantment(row.ench);
+    } else if (row.table == "equipment") {
+        if (skip_if_exists && p.eq().contains(row.id))
+            return;
+        if (override && p.eq().contains(row.id))
+            p.remove_equipment(row.id);
+        p.add_equipment(row.eq);
+    } else { // tags
+        if (skip_if_exists && p.tags().contains(row.id))
+            return;
+        if (override && p.tags().contains(row.id))
+            p.remove_tag(row.id);
+        p.add_tag(row.tag);
+        if (write_values) {
+            auto res = p.tag_resolver_ptr();
+            if (!res) {
+                res = std::make_shared<TagResolver>();
+                p.set_tag_resolver(res);
+            }
+            // 替换语义：源 raw values（含 #ref）整体覆盖目标 resolver 该 tag 值。
+            res->add_tag(row.tag.id.get_ns() + ":" + row.tag.id.get_id(),
+                         std::unordered_set<std::string>(row.tag_values.begin(), row.tag_values.end()));
+        }
+    }
+}
+
 // ── 语句级原子守卫：变更前深拷贝（含 TagResolver 独立副本）；未提交即恢复 ──
 
 struct ProfileWriteGuard {
@@ -610,6 +719,8 @@ SqlResult SqlExecutor::execute(const SqlStmt& stmt) {
         return exec_update(*upd);
     if (const auto* del = std::get_if<DeleteStmt>(&stmt))
         return exec_delete(*del);
+    if (const auto* cp = std::get_if<CopyStmt>(&stmt))
+        return exec_copy(*cp);
     // STATUS/SAVE 由 Task 4 的 SqlSession（脏跟踪 + 基线 diff + 持久化）提供。
     SqlResult r;
     r.message = "STATUS/SAVE land in Task 4";
@@ -1037,7 +1148,232 @@ SqlResult SqlExecutor::exec_delete(const DeleteStmt& s) {
     return r;
 }
 
-// ── UNDO 栈（快照 = 成功写语句前的 profile 深拷贝；容量 16，FIFO 淘汰） ──
+// ── 写面：COPY（跨 profile 行级复制；三档 FK + WITH DEPS 闭包 + OVERRIDE + 原子） ──
+//
+// 语义（片 2 全局约束 3-6，binding）：
+// - 目标 = 当前 profile；源/目标缺失 → 语句错误（不抛异常）。
+// - 严格（默认）：复制集（仅主行）引用存在性校验，校验宇宙 = 目标 profile；
+//   缺失 → `missing refs: <ref> (used by <row_id>.<field>), ...`（全量、排序稳定）。
+// - WITH DEPS：沿源 FK 边取传递闭包（visited 防环）；依赖行目标已有 → 跳过；
+//   闭包自洽 → 不再校验。DEPS+OVERRIDE：OVERRIDE 只作用于主行。
+// - WITH IGNORE：跳过 FK 校验（允许悬空写入）。
+// - 主行冲突：默认报错（整句原子回滚）；WITH OVERRIDE 替换（id 保留）。
+// - 原子：全部校验先行 → 一次性写入 → push_undo 先于 commit → try/catch notify。
+
+SqlResult SqlExecutor::exec_copy(const CopyStmt& s) {
+    SqlResult r;
+    const std::vector<ColDef>* cols = table_cols(s.table);
+    if (!cols) {
+        r.message = "unknown table '" + s.table + "'";
+        return r;
+    }
+    Profile* prof = _mgr.find(_current);
+    if (!prof) {
+        r.message = "unknown profile '" + _current + "'";
+        return r;
+    }
+    const Profile* src = _mgr.find(s.source);
+    if (!src) {
+        r.message = "unknown profile '" + s.source + "'";
+        return r;
+    }
+    // 表/列校验先行（star = 全列；显式列/WHERE 列须存在）。
+    if (!s.star) {
+        for (const auto& c : s.cols)
+            if (col_index(*cols, c) < 0) {
+                r.message = "unknown column '" + c + "'";
+                return r;
+            }
+    }
+    for (const auto& w : s.where) {
+        if (w.col.empty())
+            continue; // 哨兵
+        if (col_index(*cols, w.col) < 0) {
+            r.message = "unknown column '" + w.col + "' in WHERE";
+            return r;
+        }
+    }
+
+    const std::vector<NSID> main_ids = match_ids(*src, s.table, *cols, s.where);
+    if (main_ids.empty()) {
+        r.message = "0 row(s) affected";
+        return r;
+    }
+    const bool has_values = s.star || std::find(s.cols.begin(), s.cols.end(), "values") != s.cols.end();
+
+    // ── 构建主行（star = 整行拷贝；列子集 = 默认构造 + 仅复制指定列） ──
+    std::vector<PendingRow> main_rows;
+    std::vector<std::string> conflicts;
+    for (const NSID& id : main_ids) {
+        PendingRow row;
+        row.table = s.table;
+        row.id = id;
+        if (s.table == "enchantment") {
+            const EnchInfo& src_e = src->ench().at(id);
+            if (s.star) {
+                row.ench = src_e;
+            } else {
+                const auto rrow = enchantment_row(src_e);
+                for (const auto& c : s.cols) {
+                    const int ci = col_index(*cols, c);
+                    if (!set_field_enchantment(c, rrow[static_cast<size_t>(ci)], row.ench, r.message))
+                        return r;
+                }
+                // 镜像 loader 不变量（仅列子集触发；`*` 整行复制源行合法不触发）：
+                // 缺 max_level/multiplier → 默认 0、空 supported_items → 回读即丢。
+                if (row.ench.max_level < 1 || row.ench.multiplier < 1 || row.ench.supported_items.empty()) {
+                    r.message = "copied row '" + id.str() + "' would be dropped on reload";
+                    return r;
+                }
+            }
+        } else if (s.table == "equipment") {
+            const Equipment& src_eq = src->eq().at(id);
+            if (s.star) {
+                row.eq = src_eq;
+            } else {
+                // 值初始化：Equipment::max_durability 无默认初始化器（默认构造为
+                // 未初始化垃圾值），显式归零使"缺列 = 目标默认 0"确定（域类型缺口，
+                // 见 T2 报告；不改 Equipment.h——不在本任务文件清单）。
+                Equipment eq{};
+                const auto rrow = equipment_row(src_eq);
+                for (const auto& c : s.cols) {
+                    const int ci = col_index(*cols, c);
+                    if (!set_field_equipment(c, rrow[static_cast<size_t>(ci)], eq, r.message))
+                        return r;
+                }
+                row.eq = std::move(eq);
+            }
+        } else { // tags
+            const EquipmentTag& src_t = src->tags().at(id);
+            if (s.star) {
+                row.tag = src_t;
+                row.tag_values = raw_values_of(*src, src_t);
+            } else {
+                const auto rrow = tags_row(*src, src_t);
+                for (const auto& c : s.cols) {
+                    if (c == "values")
+                        continue; // values 列特殊：raw 复制（保留 #ref），不走字符串化行
+                    const int ci = col_index(*cols, c);
+                    if (!set_field_tags(c, rrow[static_cast<size_t>(ci)], row.tag, row.tag_values, r.message))
+                        return r;
+                }
+                if (has_values)
+                    row.tag_values = raw_values_of(*src, src_t);
+            }
+        }
+        // 主行冲突：默认报错；OVERRIDE 走替换（写阶段 remove-then-add，id 保留）。
+        if (table_contains(*prof, s.table, id) && !s.with_override)
+            conflicts.push_back(row_kind(s.table) + " '" + id.str() + "' already exists");
+        main_rows.push_back(std::move(row));
+    }
+    if (!conflicts.empty()) {
+        r.message = join_err(conflicts, "; ");
+        return r;
+    }
+
+    // ── 严格档 FK：复制集（仅主行）引用须存在于目标（目标 = 校验宇宙） ──
+    if (!s.with_deps && !s.with_ignore) {
+        std::vector<std::string> missing;
+        for (const auto& row : main_rows) {
+            if (row.table == "enchantment")
+                collect_ench_missing(*prof, row.ench, missing);
+            else if (row.table == "equipment")
+                collect_eq_missing(*prof, row.eq, missing);
+            else
+                collect_tag_missing(*prof, row.tag.id, row.tag_values, missing);
+        }
+        if (!missing.empty()) {
+            std::sort(missing.begin(), missing.end());
+            r.message = "missing refs: " + join_err(missing, ", ");
+            return r;
+        }
+    }
+
+    // ── WITH DEPS：沿源 FK 边取传递闭包（visited 防环；源注册表取行） ──
+    std::vector<PendingRow> dep_rows;
+    if (s.with_deps) {
+        std::unordered_set<std::string> visited;
+        std::deque<std::pair<std::string, NSID>> queue;
+        std::vector<std::pair<std::string, NSID>> pending_deps;
+        auto enqueue = [&](const std::string& tbl, const std::string& idstr) {
+            NSID id;
+            if (!to_nsid(idstr, id))
+                return;
+            if (!table_contains(*src, tbl, id))
+                return; // 源无此行（源侧悬空引用）→ 忽略
+            const std::string key = tbl + "\x1f" + id.str();
+            if (!visited.insert(key).second)
+                return;
+            queue.emplace_back(tbl, id);
+            pending_deps.push_back({tbl, id});
+        };
+        for (const NSID& id : main_ids) {
+            visited.insert(s.table + "\x1f" + id.str());
+            queue.emplace_back(s.table, id);
+        }
+        while (!queue.empty()) {
+            const auto [tbl, id] = queue.front();
+            queue.pop_front();
+            if (tbl == "enchantment") {
+                const EnchInfo& e = src->ench().at(id);
+                for (const auto& x : e.exclusive_set)
+                    enqueue("enchantment", x.str());
+                for (const auto& x : e.supported_items)
+                    enqueue(x.is_tag() ? "tags" : "equipment", x.str());
+            } else if (tbl == "equipment") {
+                const Equipment& eq = src->eq().at(id);
+                enqueue("tags", eq.category.str());
+            } else { // tags：raw values（EntryRef→equipment / TagRef→tags，递归）
+                if (const TagResolver* tr = src->tag_resolver()) {
+                    if (const auto* raw = tr->raw_values(id.get_ns() + ":" + id.get_id())) {
+                        for (const auto& v : *raw) {
+                            if (const auto* e = std::get_if<EntryRef>(&v))
+                                enqueue("equipment", e->id);
+                            else if (const auto* t = std::get_if<TagRef>(&v))
+                                enqueue("tags", "#" + t->key);
+                        }
+                    }
+                }
+            }
+        }
+        // 依赖行整行拷贝（star 语义）；目标已有 → 跳过（不覆盖、不报错）。
+        for (const auto& [tbl, id] : pending_deps) {
+            if (table_contains(*prof, tbl, id))
+                continue; // 依赖已满足
+            PendingRow row;
+            row.table = tbl;
+            row.id = id;
+            if (tbl == "enchantment")
+                row.ench = src->ench().at(id);
+            else if (tbl == "equipment")
+                row.eq = src->eq().at(id);
+            else {
+                row.tag = src->tags().at(id);
+                row.tag_values = raw_values_of(*src, row.tag);
+            }
+            dep_rows.push_back(std::move(row));
+        }
+    }
+
+    // ── 原子写：全部校验（冲突 + FK）先行 → 一次性写入 → push_undo 先于 commit ──
+    ProfileWriteGuard guard(_mgr, prof);
+    for (const auto& row : main_rows)
+        write_pending(*prof, row, s.with_override, false, has_values);
+    for (const auto& row : dep_rows)
+        write_pending(*prof, row, false, true, true);
+    // I3（终审）：push_undo 先于 commit——push_undo 抛异常时 guard 未提交，
+    // 仍会恢复语句前快照；快照按值传入（不 move）。
+    push_undo(_current, guard.snapshot);
+    guard.commit();
+    try {
+        _mgr.notify_mutated();
+    } catch (...) {
+    }
+
+    r.affected = static_cast<int64_t>(main_rows.size() + dep_rows.size());
+    r.message = std::to_string(r.affected) + " row(s) affected";
+    return r;
+}
 
 void SqlExecutor::push_undo(const std::string& profile, Profile snapshot) {
     _undo.push_back(UndoEntry{profile, std::make_shared<Profile>(std::move(snapshot))});
