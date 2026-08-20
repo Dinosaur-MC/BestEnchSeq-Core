@@ -823,3 +823,224 @@ TEST_CASE("system: profile sql cross json messages") {
     expect_contains(r.err, "row(s) affected", "cross json: affected message on stderr");
     TEST_PASS("system: profile sql cross json messages");
 }
+
+// ── slice-3 REPL system e2e（真实 CLI：profile sql -i + 管道 stdin）────────
+//
+// 全部经 run_besq 的 stdin_input 管道注入；退出码由 popen/CreateProcess 原生
+// 捕获（非 shell $?）。交互 UI（提示符 `profile> `/`...> `、HELP、undo 确认）
+// text → stdout、json → stderr；语句消息 text → stdout、json → stderr；错误
+// （语句错误/解析错误）恒 stderr。临时 profiles 目录（BESQ_PROFILES_DIR）隔离
+// + unique_ts_suffix 唯一 profile 名，RAII 清理，顺序无关。
+
+TEST_CASE("system: profile sql repl basic") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // REPL 会话内 USE p2 → INSERT → SELECT（跨语句常驻会话），QUIT 带脏警告
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_repl_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p2 = "besq_repl_p2_" + unique_ts_suffix();
+    const std::string x = "test:replmark";
+    {
+        std::ofstream f(std::filesystem::path(tmp) / (p2 + ".json"));
+        f << "{\"name\":\"" << p2 << "\",\"enchantments\":[],\"equipments\":[],\"tags\":{}}";
+    }
+    const std::string stdin_input =
+        "USE " + p2 + ";\n"
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('" + x + "','ReplMark',1,1,'#minecraft:swords');\n"
+        "SELECT id FROM enchantment WHERE id='" + x + "';\n"
+        "QUIT\n";
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"}, stdin_input,
+                      {{"BESQ_PROFILES_DIR", tmp}});
+    expect_eq(r.exit_code, 0, "repl basic: exit 0");
+    expect_contains(r.out, "profile> ", "repl basic: interactive prompt");
+    expect_contains(r.out, "use: " + p2, "repl basic: USE message");
+    expect_contains(r.out, "1 row(s) affected", "repl basic: insert message");
+    expect_contains(r.out, x, "repl basic: SELECT sees the inserted row");
+    expect_contains(r.err, "unsaved changes in: " + p2, "repl basic: dirty tracks p2 on exit");
+    TEST_PASS("system: profile sql repl basic");
+}
+
+TEST_CASE("system: profile sql repl omitted semicolon") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // 单行省略分号：parse 成功即提交（无 ';' 也可）
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                      "SELECT id FROM enchantment WHERE id='minecraft:sharpness'\nQUIT\n", {});
+    expect_eq(r.exit_code, 0, "repl no-semicolon: exit 0");
+    expect_contains(r.out, "minecraft:sharpness", "repl no-semicolon: single-line submit shows row");
+    TEST_PASS("system: profile sql repl omitted semicolon");
+}
+
+TEST_CASE("system: profile sql repl multiline continuation") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // 多行续行：SELECT id, + 换行 + name → 续行提示 ...> 出现，两列结果
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                      "SELECT id,\n name FROM enchantment;\nQUIT\n", {});
+    expect_eq(r.exit_code, 0, "repl multiline: exit 0");
+    expect_contains(r.out, "...> ", "repl multiline: continuation prompt");
+    expect_contains(r.out, "name", "repl multiline: second column rendered");
+    TEST_PASS("system: profile sql repl multiline continuation");
+}
+
+TEST_CASE("system: profile sql repl error does not exit") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // FROB 报错后 SELECT 仍执行（错误不退出 REPL）
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                      "FROB x;\nSELECT id FROM enchantment WHERE id='minecraft:sharpness';\nQUIT\n", {});
+    expect_eq(r.exit_code, 0, "repl err-continue: exit 0");
+    expect_contains(r.err, "unsupported statement 'frob'", "repl err-continue: FROB parse error on stderr");
+    expect_contains(r.out, "minecraft:sharpness", "repl err-continue: SELECT still executed after error");
+    TEST_PASS("system: profile sql repl error does not exit");
+}
+
+TEST_CASE("system: profile sql repl hard error vs continuation") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // (a) UPDATE 无 WHERE 且无分号 → 提交期硬错误（requires WHERE），清缓冲
+    //     不续行（后续提示是 profile> 而非 ...>）
+    auto ra = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                       "UPDATE equipment SET max_durability=500\nQUIT\n", {});
+    expect_eq(ra.exit_code, 0, "repl hard: exit 0");
+    expect_contains(ra.err, "requires WHERE", "repl hard: UPDATE requires WHERE on stderr");
+    expect(ra.out.find("...> ") == std::string::npos, "repl hard: no continuation prompt after hard error");
+    // (b) SELECT FROM; → 提交期解析硬错误（expected FROM），不崩溃
+    auto rb = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                       "SELECT FROM;\nQUIT\n", {});
+    expect_eq(rb.exit_code, 0, "repl hard select-from: exit 0");
+    expect_contains(rb.err, "expected FROM", "repl hard: SELECT FROM parse error on stderr");
+    // (c) SELECT FROM（无分号）→ 续行 ...>，QUIT 后 EOF 残余缓冲报错，不崩溃
+    auto rc_ = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                        "SELECT FROM\nQUIT\n", {});
+    expect_eq(rc_.exit_code, 0, "repl hard select-from-eof: exit 0");
+    expect_contains(rc_.out, "...> ", "repl hard select-from-eof: continuation prompt shown");
+    expect_contains(rc_.err, "expected FROM", "repl hard select-from-eof: EOF residual error on stderr");
+    TEST_PASS("system: profile sql repl hard error vs continuation");
+}
+
+TEST_CASE("system: profile sql repl help") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // HELP：语句清单（text 模式 → stdout）
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"}, "HELP\nQUIT\n", {});
+    expect_eq(r.exit_code, 0, "repl help: exit 0");
+    expect_contains(r.out, "SELECT", "repl help: statement list mentions SELECT");
+    expect_contains(r.out, "FORK", "repl help: statement list mentions FORK");
+    expect_contains(r.out, "UNDO", "repl help: statement list mentions UNDO");
+    TEST_PASS("system: profile sql repl help");
+}
+
+TEST_CASE("system: profile sql repl cross undo") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // 跨调用 UNDO：INSERT（行写入）→ UNDO 命令（undo: reverted）→ SELECT 不见行
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_repl_undo_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string x = "test:replundo";
+    const std::string stdin_input =
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('" + x + "','ReplUndo',1,1,'#minecraft:swords');\n"
+        "UNDO;\n"
+        "SELECT id FROM enchantment WHERE id='" + x + "';\n"
+        "QUIT\n";
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"}, stdin_input,
+                      {{"BESQ_PROFILES_DIR", tmp}});
+    expect_eq(r.exit_code, 0, "repl undo: exit 0");
+    expect_contains(r.out, "undo: reverted", "repl undo: confirmation message");
+    expect(r.out.find(x) == std::string::npos, "repl undo: row not visible after UNDO");
+    TEST_PASS("system: profile sql repl cross undo");
+}
+
+TEST_CASE("system: profile sql repl dirty warning") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // 脏警告退出：USE p2 → INSERT（未 SAVE）→ QUIT → stderr 点名 p2，exit 0
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_repl_dirty_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p2 = "besq_repl_dirty_p2_" + unique_ts_suffix();
+    {
+        std::ofstream f(std::filesystem::path(tmp) / (p2 + ".json"));
+        f << "{\"name\":\"" << p2 << "\",\"enchantments\":[],\"equipments\":[],\"tags\":{}}";
+    }
+    const std::string stdin_input =
+        "USE " + p2 + ";\n"
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('test:dirtymark','DirtyMark',1,1,'#minecraft:swords');\n"
+        "QUIT\n";
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"}, stdin_input,
+                      {{"BESQ_PROFILES_DIR", tmp}});
+    expect_eq(r.exit_code, 0, "repl dirty: exit 0");
+    expect_contains(r.out, "use: " + p2, "repl dirty: USE message");
+    expect_contains(r.err, "unsaved changes in: " + p2, "repl dirty: warning names p2");
+    TEST_PASS("system: profile sql repl dirty warning");
+}
+
+TEST_CASE("system: profile sql repl json format") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // --format json：stdout 纯 JSON 数组（提示符/语句消息全走 stderr）
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_repl_json_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string x = "test:repljson";
+    const std::string stdin_input =
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('" + x + "','ReplJson',1,1,'#minecraft:swords');\n"
+        "SELECT id FROM enchantment WHERE id='" + x + "';\n"
+        "QUIT\n";
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i", "--format", "json"}, stdin_input,
+                      {{"BESQ_PROFILES_DIR", tmp}});
+    expect_eq(r.exit_code, 0, "repl json: exit 0");
+    expect(!r.out.empty() && r.out.front() == '[', "repl json: stdout starts with a JSON array");
+    expect_contains(r.out, x, "repl json: SELECT row in JSON");
+    expect(r.out.find("row(s) affected") == std::string::npos, "repl json: no message text on stdout");
+    expect(r.out.find("profile> ") == std::string::npos, "repl json: no prompt on stdout");
+    expect_contains(r.err, "row(s) affected", "repl json: affected message on stderr");
+    TEST_PASS("system: profile sql repl json format");
+}
+
+TEST_CASE("system: profile sql repl interactive exclusive") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // -i 与 <stmt> 互斥 → 本地化错误，exit 1（--lang en_US 钉英文文案）
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i", "SELECT 1"}, {}, {});
+    expect_eq(r.exit_code, 1, "repl exclusive: exit 1");
+    expect_contains(r.err, "-i cannot be combined with a statement argument",
+                    "repl exclusive: mutual-exclusion error on stderr");
+    TEST_PASS("system: profile sql repl interactive exclusive");
+}
