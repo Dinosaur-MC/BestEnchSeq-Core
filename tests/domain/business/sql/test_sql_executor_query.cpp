@@ -276,3 +276,77 @@ TEST_CASE("sql_write_statements_deferred") {
     expect(sv.message.find("Task 4") != std::string::npos, "SAVE lands in Task 4");
     TEST_PASS("write statements land in Task 3/4");
 }
+
+// ─── 积压清扫 T1.4（spec §3.1 测试补强批）：query 面 AND 多条件 / 未知列 /
+// 空表（片 1 T2 minor）─────────────────────────────────────────────────────
+
+// T1.4a：AND 多条件过滤——WHERE c1=v1 AND c2=v2 → 仅两条件同时成立的行。
+TEST_CASE("sql_where_and_multiple_conditions") {
+    ProfileManager mgr = make_vanilla();
+    const auto& p = *mgr.find("builtin:vanilla");
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+
+    // 双条件 AND：max_level=5 AND is_treasure=false → 行数 = 注册表交集计数
+    auto r = ex.execute(std::get<SelectStmt>(SqlParser{}.parse(
+        "SELECT id, max_level, is_treasure FROM enchantment WHERE max_level=5 AND is_treasure=false;")[0]));
+    int n = 0;
+    for (const auto& [id, e] : p.ench().data())
+        if (e.max_level == 5 && !e.is_treasure)
+            ++n;
+    expect(r.rows.size() == static_cast<size_t>(n), "AND count matches registry intersection");
+    for (const auto& row : r.rows)
+        expect(row[1] == "5" && row[2] == "false", "every AND-matched row satisfies both conditions");
+
+    // id 唯一 → 双条件同时命中恰一行
+    auto r2 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse(
+        "SELECT id, name FROM enchantment WHERE id='minecraft:sharpness' AND name='Sharpness';")[0]));
+    expect(r2.rows.size() == 1, "AND on unique id + name -> exactly one row");
+    expect(r2.rows[0][0] == "minecraft:sharpness", "AND-matched row id");
+
+    // 第二条件不匹配 → 0 行（AND 语义：任一条件失败即排除）
+    auto r3 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse(
+        "SELECT id FROM enchantment WHERE id='minecraft:sharpness' AND name='Bane Of Arthropods';")[0]));
+    expect(r3.rows.empty(), "AND with failing second condition -> empty");
+    TEST_PASS("where AND multiple conditions");
+}
+
+// T1.4b：WHERE 未知列 → 错误消息（exec_select 的 WHERE 列校验路径；投影未知
+// 列已由 sql_unknown_column_error 覆盖）。
+TEST_CASE("sql_where_unknown_column_error") {
+    ProfileManager mgr = make_vanilla();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+    auto r = ex.execute(std::get<SelectStmt>(SqlParser{}.parse(
+        "SELECT id FROM enchantment WHERE bogus='x';")[0]));
+    expect(r.headers.empty() && r.rows.empty(), "empty result on unknown WHERE column");
+    expect(r.message.find("unknown column 'bogus' in WHERE") != std::string::npos,
+           "error names the unknown WHERE column");
+    TEST_PASS("where unknown column error");
+}
+
+// T1.4c：空表 → SELECT 0 行（空 profile 三表皆空；headers 仍按列元数据枚举，
+// 空结果非错误）。
+TEST_CASE("sql_empty_table_select_zero_rows") {
+    ProfileManager mgr;
+    mgr.create("empty"); // 空 profile：ench/eq/tags 全空
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("empty");
+
+    auto r = ex.execute(std::get<SelectStmt>(SqlParser{}.parse("SELECT * FROM enchantment;")[0]));
+    expect(r.rows.empty(), "empty enchantment table -> 0 rows");
+    expect(r.headers.size() == 11, "star still enumerates the 11 column headers");
+    expect(r.message.empty(), "empty table is not an error");
+
+    auto r2 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse("SELECT id FROM equipment;")[0]));
+    expect(r2.rows.empty(), "empty equipment table -> 0 rows");
+    auto r3 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse("SELECT id FROM tags;")[0]));
+    expect(r3.rows.empty(), "empty tags table -> 0 rows");
+
+    // WHERE 过滤空表 → 0 行（哨兵与非哨兵一致）
+    auto r4 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse("SELECT id FROM enchantment WHERE true;")[0]));
+    expect(r4.rows.empty(), "WHERE true on empty table -> 0 rows");
+    auto r5 = ex.execute(std::get<SelectStmt>(SqlParser{}.parse("SELECT id FROM enchantment WHERE max_level=5;")[0]));
+    expect(r5.rows.empty(), "WHERE cond on empty table -> 0 rows");
+    TEST_PASS("empty table select zero rows");
+}

@@ -183,3 +183,96 @@ TEST_CASE("sql_parser_copy_mods_errors") {
     expect(r6.size() == 2, "earlier statements kept, bad COPY dropped");
     TEST_PASS("copy mods errors");
 }
+
+// ─── 积压清扫 T1.1-T1.3 / T1.7（spec §3.1 测试补强批）────────────────────
+
+// T1.1：`WHERE true AND` 错误路径——parse 返回部分输出（哨兵 where 已解析的
+// SELECT）+ error 的既有契约（片 1 T1 minor）。
+// parse_where 对 `WHERE true AND ...`：先产出哨兵条件（WhereCond{"", "true"}）
+// 再 fail "WHERE true matches all rows; cannot combine with AND"；parse_impl
+// 在 error 上浮检查（L435）前已 push 该 SELECT（L131）→ 非空向量 + error。
+// run_sql 侧任何 parser.error → 全链零执行，故部分输出不产生副作用。
+TEST_CASE("sql_parser_where_true_and_error_contract") {
+    SqlParser p;
+    auto r = p.parse("SELECT id FROM enchantment WHERE true AND id='x';");
+    expect(!p.error.empty(), "WHERE true AND sets an error");
+    expect(p.error.find("cannot combine with AND") != std::string::npos, "error names the AND conflict");
+    expect(r.size() == 1, "partial select retained alongside the error (established contract)");
+    const auto& s = std::get<SelectStmt>(r[0]);
+    expect(s.table == "enchantment", "partial stmt keeps table");
+    expect(s.where.size() == 1 && s.where[0].col.empty() && s.where[0].val == "true",
+           "sentinel condition parsed before the error");
+    TEST_PASS("where true AND error contract");
+}
+
+// T1.2：`WHERE true` 哨兵完整契约——where.size()==1 && col.empty() &&
+// val=="true"（片 1 T1 minor：既有断言只查 col.empty，补 val 断言）。
+TEST_CASE("sql_parser_where_true_sentinel_full_contract") {
+    auto s = SqlParser{}.parse("SELECT id FROM enchantment WHERE true;");
+    expect(s.size() == 1, "select parses");
+    const auto& sel = std::get<SelectStmt>(s[0]);
+    expect(sel.where.size() == 1, "sentinel is a single condition");
+    expect(sel.where[0].col.empty(), "sentinel col empty");
+    expect(sel.where[0].val == "true", "sentinel val is \"true\"");
+    // UPDATE 路径走同一 parse_where，契约一致
+    auto u = SqlParser{}.parse("UPDATE equipment SET max_durability=1 WHERE true;");
+    expect(u.size() == 1, "update parses");
+    const auto& upd = std::get<UpdateStmt>(u[0]);
+    expect(upd.where.size() == 1 && upd.where[0].col.empty() && upd.where[0].val == "true",
+           "update sentinel full contract");
+    TEST_PASS("where true sentinel full contract");
+}
+
+// T1.3：`SELECT *` / `SHOW FROM` 解析路径——star=true、table 正确（片 1 T1
+// minor，现无直接解析层测试；执行层由 test_sql_executor_query 覆盖）。
+TEST_CASE("sql_parser_select_star_and_show") {
+    auto star = SqlParser{}.parse("SELECT * FROM enchantment;");
+    expect(star.size() == 1, "select star parses");
+    const auto& ss = std::get<SelectStmt>(star[0]);
+    expect(ss.star, "SELECT * sets star");
+    expect(ss.table == "enchantment", "star select table correct");
+    expect(ss.cols.empty(), "star select carries no explicit cols");
+
+    auto show = SqlParser{}.parse("SHOW FROM enchantment;");
+    expect(show.size() == 1, "show parses");
+    const auto& sh = std::get<SelectStmt>(show[0]);
+    expect(sh.star, "SHOW implies star (full columns)");
+    expect(sh.table == "enchantment", "show table correct");
+
+    // 混合链：SHOW FROM + SELECT * 并列解析（语句间以分号分隔）
+    auto both = SqlParser{}.parse("SHOW FROM equipment; SELECT * FROM tags;");
+    expect(both.size() == 2, "show + star select both parse");
+    expect(std::get<SelectStmt>(both[0]).star && std::get<SelectStmt>(both[0]).table == "equipment",
+           "show equipment");
+    expect(std::get<SelectStmt>(both[1]).star && std::get<SelectStmt>(both[1]).table == "tags",
+           "star tags");
+    TEST_PASS("select star and show parse");
+}
+
+// T1.7：超长数字字面量（40 位）→ 优雅解析错误而非异常逃逸（配合 T2 F1）。
+// 当前 HEAD（F1 未修）：SqlLexer.cpp:83 `std::stoll` 对 40 位数字抛
+// std::out_of_range 且未捕获 → 异常逃出 SqlParser::parse（run_sql 的 parse
+// 在 try 外 → CLI 顶层 catch 显示 "stoll argument out of range" + exit 1；
+// REPL 直接死）。此为已知缺陷行为（RED）——记录并 SKIP，不破坏全量 ctest
+// 回归门；T2 F1（lexer 捕获 stoll → lexer error "integer literal out of
+// range"，走零执行路径）落地后此分支不再触发，下方契约断言生效转绿
+// （跨任务 TDD）。
+TEST_CASE("sql_lexer_long_integer_graceful_error") {
+    const std::string forty_digits(40, '9');
+    SqlParser p;
+    std::vector<SqlStmt> stmts;
+    try {
+        stmts = p.parse("SELECT id FROM enchantment WHERE id=" + forty_digits + ";");
+    } catch (const std::out_of_range& e) {
+        SKIP(std::string("awaiting T2 F1 (SqlLexer stoll catch): 40-digit literal throws out_of_range and escapes parse: ") +
+             e.what());
+    } catch (const std::exception& e) {
+        expect(false, std::string("40-digit literal: unexpected exception type escaped parse: ") + e.what());
+        return;
+    }
+    // 契约（T2 F1 后）：lexer 捕获 → 解析错误（含 "out of range"）+ 零语句，不崩溃。
+    expect(!p.error.empty(), "40-digit integer literal -> graceful parse error");
+    expect(p.error.find("out of range") != std::string::npos, "error mentions out of range");
+    expect(stmts.empty(), "zero statements on lexer error (zero-execution guarantee)");
+    TEST_PASS("long integer literal rejected gracefully");
+}

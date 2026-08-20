@@ -452,6 +452,59 @@ TEST_CASE("test_pm_load_directory_replace_keeps_active") {
     TEST_PASS("test_pm_load_directory_replace_keeps_active");
 }
 
+// ─── 积压清扫 T1.6（spec §3.1 测试补强批）：唯一活跃 profile 被替换 ───────
+// 空 map 分支（片 1 T6 minor）——test_pm_load_directory_replace_keeps_active
+// 覆盖 ≥2 profile 时的 replace 恢复；本用例补 remove() 的 `_profiles.empty()`
+// 分支（L110-111：移除唯一 profile → _active.clear()）的直接测试，以及
+// replace-only-active 走该分支后选中恢复。
+
+TEST_CASE("test_pm_remove_only_active_clears_selection") {
+    // 直接路径：创建唯一 profile → 激活 → 移除 → 活动选中清空（空 map 分支）。
+    ProfileManager mgr;
+    mgr.create("solo");
+    mgr.activate("solo");
+    expect(mgr.active_name() == "solo", "solo active");
+    expect(mgr.remove("solo"), "remove the only active profile succeeds");
+    expect(mgr.size() == 0, "manager empty after remove");
+    expect(mgr.active_name().empty(), "removing the only active profile clears the active selection");
+    expect_throws_as<std::runtime_error>([&]() { mgr.active(); },
+                                         "active() throws when manager is empty after remove");
+    expect_throws_as<std::runtime_error>([&]() { mgr.activate("solo"); },
+                                         "activating a removed profile throws");
+
+    // replace-only-active（load_directory replace-on-conflict 路径）：目录仅含
+    // 一个 profile 且为活动选中 → remove() 走空 map 分支 → 重新 add 后恢复选中。
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() / ("besq_pm_solo_replace_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+    auto path = dir / "builtin_vanilla.json";
+    {
+        std::ofstream f(path);
+        f << R"({
+            "name": "builtin:vanilla",
+            "dependencies": [],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+    ProfileManager pm;
+    pm.load_directory(dir);
+    expect(pm.exists("builtin:vanilla"), "only profile loaded");
+    expect(pm.size() == 1, "exactly one profile (empty-map branch precondition)");
+    pm.activate("builtin:vanilla");
+    // 重载同一目录 → 同名文件 replace-on-conflict：remove() 后 map 空
+    // （空 map 分支 _active.clear()），重新 add 后活动选中必须恢复。
+    pm.load_directory(dir);
+    expect(pm.exists("builtin:vanilla"), "re-added after replacing the ONLY active profile");
+    expect(pm.active_name() == "builtin:vanilla", "active restored after replacing the ONLY active profile");
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(dir);
+    TEST_PASS("test_pm_remove_only_active_clears_selection");
+}
+
 // ─── Test: Effective View (topological merge + TagResolver + cache) ────
 
 TEST_CASE("test_pm_effective_view") {

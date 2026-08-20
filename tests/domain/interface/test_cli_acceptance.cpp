@@ -1802,3 +1802,80 @@ TEST_CASE("cli_slice_sql_cross_json_messages") {
     expect(se.find("row(s) affected") != std::string::npos, "copy affected message on stderr (json)");
     TEST_PASS("sql cross json messages");
 }
+
+// ─── 积压清扫 T1.5（spec §3.1 测试补强批）：--profile 正向 ────────────────
+// 非交互链式指定非激活 profile：语句写/读实际作用于它（片 1 T5 minor——现无
+// 直接测试：cli_slice_sql_use_chain 覆盖 --profile + 链内 USE 覆盖，未覆盖
+// "纯 --profile 指向非激活 profile 且激活 profile 不变"）。
+// run_sql 的 profile 参数 = CLI `--profile` 的映射（CLIApp L595：sql_profile
+// 空 → ctx 激活 profile，否则显式 profile），与 cli_slice_sql_use_chain 同源。
+
+TEST_CASE("cli_slice_sql_profile_targets_non_active") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    static int counter = 0;
+    const std::string tmp =
+        (std::filesystem::temp_directory_path() / ("besq_sql_prof_" + std::to_string(++counter))).string();
+    std::error_code ec;
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
+    {
+        std::ofstream f(std::filesystem::path(tmp) / "p_target.json");
+        f << R"({"name":"p_target","enchantments":[],"equipments":[],"tags":{}})";
+    }
+    {
+        std::ofstream f(std::filesystem::path(tmp) / "p_other.json");
+        f << R"({"name":"p_other","enchantments":[],"equipments":[],"tags":{}})";
+    }
+    BesqContext ctx;
+    ctx.load_builtin(); // 激活 builtin:vanilla（默认/激活 profile）
+    ctx.set_profiles_dir(tmp);
+    ctx.load_profiles();
+    expect(ctx.active_profile() == "builtin:vanilla", "builtin:vanilla is the active profile");
+
+    // 链：INSERT → SAVE → SELECT（--profile p_target）：写/存/读实际作用于
+    // p_target。注：run_sql 每次调用新建 SqlSession（dirty 不跨调用），故 SAVE
+    // 必须与写语句同链。
+    {
+        std::string error;
+        auto r = ctx.run_sql(
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:profmark','ProfMark',1,1,'#minecraft:swords'); "
+            "SAVE; "
+            "SELECT id FROM enchantment WHERE id='test:profmark';",
+            "p_target", error);
+        expect(error.empty(), "--profile chain ok");
+        expect(r.steps.size() == 3, "insert + save + select steps");
+        expect_eq(r.steps[0].message, "1 row(s) affected", "insert step affected");
+        expect_eq(r.steps[1].message, "saved: p_target", "save message names the target");
+        expect(r.steps[2].rows.size() == 1 && r.steps[2].rows[0][0] == "test:profmark",
+               "SELECT after --profile reads from p_target");
+        expect(r.dirty.empty(), "dirty cleared by SAVE in the same chain");
+    }
+    {   // 激活 profile 不变：active 选中仍 builtin:vanilla，且其注册表无该行
+        expect(ctx.active_profile() == "builtin:vanilla", "active selection unchanged by --profile");
+        expect(!ctx.profile("builtin:vanilla").has_enchantment(NSID("test:profmark")),
+               "active profile registry untouched by the --profile write");
+        expect(!ctx.profile("p_other").has_enchantment(NSID("test:profmark")),
+               "other profile untouched by the --profile write");
+    }
+    {   // 读路径同样作用于目标：新会话 SELECT --profile p_target 仍见行（内存态）
+        std::string error;
+        auto r = ctx.run_sql("SELECT id FROM enchantment WHERE id='test:profmark';", "p_target", error);
+        expect(error.empty(), "read via --profile ok");
+        expect(r.steps.size() == 1 && r.steps[0].rows.size() == 1 && r.steps[0].rows[0][0] == "test:profmark",
+               "read acts on the --profile target");
+    }
+    {   // SAVE 持久化到目标 profile 文件；非目标文件不含该行
+        std::ifstream ft(std::filesystem::path(tmp) / "p_target.json");
+        std::stringstream sst;
+        sst << ft.rdbuf();
+        expect(sst.str().find("test:profmark") != std::string::npos, "p_target.json persisted the row");
+        std::ifstream fo(std::filesystem::path(tmp) / "p_other.json");
+        std::stringstream sso;
+        sso << fo.rdbuf();
+        expect(sso.str().find("test:profmark") == std::string::npos, "p_other.json unchanged");
+    }
+    std::filesystem::remove_all(tmp, ec);
+    TEST_PASS("sql --profile targets non-active profile");
+}
