@@ -97,7 +97,7 @@ const std::string& SqlSession::current() const {
 // ── 语句执行（包装 executor + 脏跟踪） ─────────────────────────────────
 
 SqlResult SqlSession::execute(const SqlStmt& stmt) {
-    // STATUS/SAVE 就地分发（executor 的 "land in Task 4" 分支只服务裸 executor）。
+    // STATUS/SAVE/USE 就地分发（executor 的 "land in Task 4" 分支只服务裸 executor）。
     if (const auto* st = std::get_if<StatusStmt>(&stmt)) {
         SqlResult r;
         r.message = status(*st);
@@ -106,19 +106,45 @@ SqlResult SqlSession::execute(const SqlStmt& stmt) {
     if (const auto* sv = std::get_if<SaveStmt>(&stmt)) {
         return save(sv->all);
     }
+    if (const auto* us = std::get_if<UseStmt>(&stmt)) {
+        // USE：会话级切换（executor 无参与；沿用 run_sql 的 use 异常兜底语义，
+        // 但转语句消息不抛）。未知 → `unknown profile '<x>'`；成功 → `use: <x>`。
+        // USE 不是写语句：不标脏、不取基线、不压 undo 配对（约束 10）。
+        SqlResult r;
+        if (!_mgr.find(us->profile)) {
+            r.message = "unknown profile '" + us->profile + "'";
+            return r;
+        }
+        _exec.set_current(us->profile);
+        r.message = "use: " + us->profile;
+        return r;
+    }
+
+    // 写目标：INSERT/UPDATE/DELETE/COPY → 当前 profile；MERGE/FORK → stmt.dest
+    // （FORK 不切换 current——executor 内写目标即 dest，勿依赖 _current）。
+    const std::string* target = &_exec.current();
+    if (const auto* mg = std::get_if<MergeStmt>(&stmt))
+        target = &mg->dest;
+    else if (const auto* fk = std::get_if<ForkStmt>(&stmt))
+        target = &fk->dest;
 
     const bool is_write = std::holds_alternative<InsertStmt>(stmt) || std::holds_alternative<UpdateStmt>(stmt) ||
-                          std::holds_alternative<DeleteStmt>(stmt);
-    if (is_write && !_dirty.count(_exec.current()) && !_baselines.count(_exec.current())) {
+                          std::holds_alternative<DeleteStmt>(stmt) || std::holds_alternative<CopyStmt>(stmt) ||
+                          std::holds_alternative<MergeStmt>(stmt) || std::holds_alternative<ForkStmt>(stmt);
+    if (is_write && !_dirty.count(*target) && !_baselines.count(*target)) {
         // 首次写前取基线快照（= 会话起点状态，因为此前无成功写）。
-        if (const Profile* p = _mgr.find(_exec.current()))
-            _baselines[_exec.current()] = clone_with_resolver(*p);
+        if (const Profile* p = _mgr.find(*target))
+            _baselines[*target] = clone_with_resolver(*p);
+        else if (std::holds_alternative<ForkStmt>(stmt))
+            // FORK 目标语句前不存在（executor 预检保证 dest 不存在）→ 基线 = 空
+            // Profile：STATUS diff 显示派生内容全 +（约束 10）。
+            _baselines[*target] = Profile(*target);
     }
 
     SqlResult r = _exec.execute(stmt);
     if (is_write && r.affected > 0) {
-        mark_dirty(_exec.current());
-        _write_history.push_back(_exec.current());
+        mark_dirty(*target);
+        _write_history.push_back(*target);
         // 与 executor 的 UNDO 栈容量（16，FIFO）对齐：旧写序不再可回滚。
         while (_write_history.size() > 16)
             _write_history.erase(_write_history.begin());
@@ -133,7 +159,15 @@ bool SqlSession::undo(std::string& err) {
         // 弹栈目标 = 最近一次成功写的 profile。
         const std::string prof = _write_history.back();
         _write_history.pop_back();
-        mark_dirty(prof);
+        // 配对清理（约束 9/10）：UNDO 后配对 profile 已不存在（FORK 的 created
+        // 条目已 remove 新 profile）→ 清 _dirty/_baselines 中该名；否则按现状
+        // 标脏（spec：UNDO 后标脏，即使无实际差）。
+        if (_mgr.find(prof) == nullptr) {
+            _dirty.erase(prof);
+            _baselines.erase(prof);
+        } else {
+            mark_dirty(prof);
+        }
     }
     return ok;
 }

@@ -1645,3 +1645,102 @@ TEST_CASE("cli_slice_sql_dirty_warning") {
     }
     TEST_PASS("sql dirty warning + brief usage");
 }
+
+// ---------------------------------------------------------------------------
+// Slice 2: profile sql — 跨 profile 链（USE 切换 / --profile 被链内 USE 覆盖 /
+// USE 未知中止链 / --format json 下 COPY/FORK 消息）
+// ---------------------------------------------------------------------------
+
+TEST_CASE("cli_slice_sql_use_chain") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    // 临时 profiles：use_a（一行）+ use_b（空）
+    static int counter = 0;
+    const std::string tmp =
+        (std::filesystem::temp_directory_path() / ("besq_sql_use_" + std::to_string(++counter))).string();
+    std::error_code ec;
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
+    {
+        std::ofstream f(std::filesystem::path(tmp) / "use_a.json");
+        f << R"({"name":"use_a","enchantments":[{"id":"test:a","name":"A","platform":"java",
+                  "max_level":1,"multiplier":1,"supported_items":["#minecraft:swords"]}],
+                  "equipments":[],"tags":{}})";
+    }
+    {
+        std::ofstream f(std::filesystem::path(tmp) / "use_b.json");
+        f << R"({"name":"use_b","enchantments":[],"equipments":[],"tags":{}})";
+    }
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.set_profiles_dir(tmp);
+    ctx.load_profiles();
+
+    {   // 链：USE use_b → INSERT → SELECT 回读（语句作用于 use_b；USE 消息不过 failure）
+        std::string error;
+        auto r = ctx.run_sql(
+            "USE use_b; "
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:ub','UB',1,1,'#minecraft:swords'); "
+            "SELECT id FROM enchantment WHERE id='test:ub';",
+            "", error);
+        expect(error.empty(), "use chain ok (use: message not a failure)");
+        expect(r.steps.size() == 3, "three steps executed");
+        expect_eq(r.steps[0].message, "use: use_b", "USE step message");
+        expect(r.steps[2].rows.size() == 1 && r.steps[2].rows[0][0] == "test:ub",
+               "SELECT after USE reads from use_b");
+        expect(r.dirty.size() == 1 && r.dirty[0] == "use_b", "dirty tracks the USE-switched profile");
+    }
+    {   // --profile（初始 use use_b）+ 链内 USE use_a 覆盖 → 写进 use_a
+        std::string error;
+        auto r = ctx.run_sql(
+            "USE use_a; "
+            "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+            "VALUES ('test:ua','UA',1,1,'#minecraft:swords'); "
+            "SELECT id FROM enchantment WHERE id='test:ua';",
+            "use_b", error);
+        expect(error.empty(), "override chain ok");
+        expect(r.steps.size() == 3, "three steps executed");
+        expect(r.steps[2].rows.size() == 1 && r.steps[2].rows[0][0] == "test:ua",
+               "in-chain USE overrides --profile");
+        expect(r.dirty.size() == 1 && r.dirty[0] == "use_a", "dirty is the overridden profile");
+    }
+    {   // USE 未知 → 语句消息走 failure → 链中止（error 报语句 1）
+        std::string error;
+        auto r = ctx.run_sql("USE nope_nope; SELECT id FROM enchantment LIMIT 1;", "use_a", error);
+        expect(!error.empty(), "unknown USE aborts the chain");
+        expect(error.find("nope_nope") != std::string::npos, "error names the unknown profile");
+        expect(error.find("statement 1") != std::string::npos, "error reports statement 1");
+        expect(r.steps.size() == 1, "chain stopped at the failing USE");
+        expect_eq(r.last.message, "unknown profile 'nope_nope'", "last message is the use error");
+    }
+    std::filesystem::remove_all(tmp, ec);
+    TEST_PASS("sql use chain");
+}
+
+TEST_CASE("cli_slice_sql_cross_json_messages") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    std::ostringstream out, err;
+    std::streambuf* oo = std::cout.rdbuf(out.rdbuf());
+    std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+    struct Restore { std::streambuf* o; std::streambuf* e;
+                     ~Restore() { std::cout.rdbuf(o); std::cerr.rdbuf(e); } } restore{oo, oe};
+    static int counter = 0;
+    const std::string fork_name = "besq_fork_json_" + std::to_string(++counter);
+    // FORK（新白名单消息 `forked: <x>`）+ COPY WITH OVERRIDE（`N row(s) affected`）
+    // → --format json：消息走 stderr，stdout 保持纯 JSON 数组；链不中止
+    const std::string stmts = "FORK builtin:vanilla AS " + fork_name + "; "
+                              "COPY * FROM builtin:vanilla INTO enchantment "
+                              "WHERE id='minecraft:sharpness' WITH OVERRIDE;";
+    const char* argv[] = {"besq", "profile", "sql", stmts.c_str(), "--format", "json"};
+    int rc = CLIApp().run(6, const_cast<char**>(argv));
+    expect(rc == 0, "fork+copy json chain exit 0");
+    const std::string so = out.str();
+    const std::string se = err.str();
+    expect(!so.empty() && so[0] == '[', "stdout is a pure JSON array");
+    expect(so.find("forked") == std::string::npos, "message text not on stdout (json)");
+    expect(se.find("forked: " + fork_name) != std::string::npos, "forked message on stderr (json)");
+    expect(se.find("row(s) affected") != std::string::npos, "copy affected message on stderr (json)");
+    TEST_PASS("sql cross json messages");
+}

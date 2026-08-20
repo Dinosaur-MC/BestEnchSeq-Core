@@ -26,7 +26,11 @@ namespace business::sql {
 /// 脏跟踪：写语句成功 → 目标 profile 标脏（首次标脏前先取基线快照）；
 /// UNDO 成功 → 标脏（spec：UNDO 后标脏，即使无实际差）；SAVE 成功 → 清脏 +
 /// 重置基线为当前状态。基线 = 上次 SAVE 时的克隆（从未 SAVE 则 = 会话起点，
-/// 由首次写前的快照充当）。
+/// 由首次写前的快照充当）。写目标按语句种类：INSERT/UPDATE/DELETE/COPY =
+/// 当前 profile；MERGE/FORK = stmt.dest（FORK 不切换 current；其基线 = 空
+/// Profile，STATUS diff 全 +）；UNDO 后配对 profile 已删除 → 清 _dirty/_baselines。
+/// USE 语句由 execute() 就地分发（成功 `use: <x>`，未知 → 语句消息不抛），
+/// 不标脏、不取基线、不压 undo 配对。
 ///
 /// SAVE 组合：`Profile::to_json()` 输出 + 把 `tags` 数组替换为对象（loader
 /// 原生格式 `"<ns>:<path>": [values...]`，与 vanilla.json 一致；values 取
@@ -46,8 +50,8 @@ public:
 
     // ── 语句执行（包装 executor + 脏跟踪） ───────────────────────────
 
-    /// 读语句透传 executor；写语句成功 → 标脏；STATUS/SAVE 语句就地分发
-    /// （结果经 SqlResult::message 返回）。
+    /// 读语句透传 executor；写语句成功 → 标脏；STATUS/SAVE/USE 语句就地分发
+    /// （结果经 SqlResult::message 返回；USE 未知 profile → 语句消息不抛）。
     SqlResult execute(const SqlStmt& stmt);
 
     /// 委托 executor UNDO 栈；成功后标脏（恢复的 profile = 最近成功写语句

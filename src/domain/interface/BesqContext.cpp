@@ -392,9 +392,10 @@ namespace {
 
 /// 语句结果是否为错误（区别于成功信息形态）：
 /// 成功形态：空 message（SELECT）、"N row(s) affected"（写，含 0）、
-/// "saved: ..." / "nothing to save"（SAVE）、"profile: ..."（STATUS 摘要）。
+/// "saved: ..." / "nothing to save"（SAVE）、"profile: ..."（STATUS 摘要）、
+/// "use: ..."（USE）、"forked: ..."（FORK）、"merged: ..."（MERGE）。
 /// 其余非空 message（unknown table/column、FK violation、already exists、
-/// cannot delete、save failed 等）均为语句错误 → 中止链。
+/// cannot delete、unknown profile、save failed 等）均为语句错误 → 中止链。
 bool sql_statement_failed(const business::sql::SqlResult& r) {
     if (r.message.empty())
         return false;
@@ -405,6 +406,12 @@ bool sql_statement_failed(const business::sql::SqlResult& r) {
     if (r.message.starts_with("saved: "))
         return false;
     if (r.message.starts_with("profile: "))
+        return false;
+    if (r.message.starts_with("use: "))
+        return false;
+    if (r.message.starts_with("forked: "))
+        return false;
+    if (r.message.starts_with("merged: "))
         return false;
     return true;
 }

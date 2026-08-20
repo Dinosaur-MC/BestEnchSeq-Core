@@ -446,3 +446,140 @@ TEST_CASE("sql_session_save_datapack_warning") {
     std::filesystem::remove_all(profiles_dir, ec);
     TEST_PASS("save datapack warning");
 }
+
+// ─── 片 2：USE 语句分发（就地切换；成功 `use: <x>`，未知 → 消息不抛） ────
+// USE 不标脏、不取基线、不压 undo 配对；其后写语句的脏跟踪作用于被 USE
+// 的 profile（约束 10）。
+
+TEST_CASE("sql_session_use_chain_dirty") {
+    auto tp = make_temp_profiles({"p1", "p2"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+    expect_eq(s.current(), "p1", "initial use p1");
+
+    // USE 语句成功：消息 `use: <profile>`，affected=0，不标脏、不压写序
+    auto u = run(s, "USE p2;");
+    expect_eq(u.message, "use: p2", "use statement message");
+    expect(u.affected == 0, "use affects 0 rows");
+    expect(s.dirty_profiles().empty(), "USE does not mark dirty");
+    expect_eq(s.current(), "p2", "current switched by USE");
+
+    // USE 未知 profile → 语句错误消息（不抛异常），current 不变，无脏
+    auto ub = run(s, "USE no_such_profile;");
+    expect_eq(ub.message, "unknown profile 'no_such_profile'", "unknown use message");
+    expect(ub.affected == 0, "failed use affects 0");
+    expect_eq(s.current(), "p2", "failed USE keeps current");
+    expect(s.dirty_profiles().empty(), "failed USE no dirty");
+
+    // USE 后的写 → 脏跟踪作用于被 USE 的 profile；STATUS 显示它
+    auto r = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                    "VALUES ('test:ux','UX',1,1,'#minecraft:swords');");
+    expect(r.affected == 1, "insert on p2 ok");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p2"}, "dirty tracks the USE-switched profile");
+    expect(s.status(StatusStmt{}).find("profile: p2 (dirty)") == 0, "STATUS shows the USE-switched profile");
+
+    // USE 不产生 undo 配对：写序只有 [p2]（INSERT），UNDO 回滚 INSERT
+    std::string err;
+    expect(s.undo(err), "undo ok");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p2"}, "undo marks dirty (existing semantics)");
+
+    tp.cleanup();
+    TEST_PASS("use chain dirty");
+}
+
+// ─── 片 2：FORK 标脏 + 空基线 + SAVE ALL 持久化回读（约束 10） ──────────
+// FORK 目标 = dest（不切换 current）；基线 = 空 Profile → STATUS <new> 全 +；
+// SAVE ALL 同时持久化源与派生；load_directory 回读派生含源内容。
+
+TEST_CASE("sql_session_fork_dirty_and_save") {
+    auto tp = make_temp_profiles({"p1"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+    // 源先有内容
+    auto r0 = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                     "VALUES ('test:src','Src',1,1,'#minecraft:swords');");
+    expect(r0.affected == 1, "source insert ok");
+
+    auto f = run(s, "FORK p1 AS p2;");
+    expect_eq(f.message, "forked: p2", "fork message");
+    expect(f.affected == 1, "fork affects 1");
+    expect_eq(s.current(), "p1", "FORK does not switch current");
+    expect(s.dirty_profiles() == (std::vector<std::string>{"p1", "p2"}), "fork marks the new profile dirty");
+
+    // STATUS p2：基线 = 空 Profile → 派生内容全 +
+    const std::string st = s.status(StatusStmt{"p2", ""});
+    expect(st.find("profile: p2 (dirty)") == 0, "status header for the fork target");
+    expect(st.find("+test:src") != std::string::npos, "forked content shows as all-+");
+
+    // SAVE ALL → p1/p2 文件都存在；load_directory 回读 p2 含源内容
+    auto sv = s.save(true);
+    expect(sv.message.find("saved: p1, p2") != std::string::npos, "save all message");
+    expect(std::filesystem::exists(std::filesystem::path(tp.dir) / "p1.json"), "p1 file exists");
+    expect(std::filesystem::exists(std::filesystem::path(tp.dir) / "p2.json"), "p2 file exists");
+    expect(s.dirty_profiles().empty(), "save all cleans both");
+
+    ProfileManager mgr2;
+    mgr2.load_directory(tp.dir);
+    const Profile* q = mgr2.find("p2");
+    expect(q != nullptr, "forked profile survives reload");
+    if (q)
+        expect(q->ench().contains(NSID("test:src")), "forked content round-trips");
+
+    tp.cleanup();
+    TEST_PASS("fork dirty and save");
+}
+
+// ─── 片 2：FORK → UNDO 清理（约束 9/10） ───────────────────────────────
+// UNDO 删除新 profile；配对名已不存在 → _dirty/_baselines 中该名被清除。
+
+TEST_CASE("sql_session_fork_undo_cleanup") {
+    auto tp = make_temp_profiles({"p1"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+    auto f = run(s, "FORK p1 AS p2;");
+    expect(f.affected == 1, "fork ok");
+    expect(tp.mgr.find("p2") != nullptr, "forked profile exists in manager");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p2"}, "fork marks new profile dirty");
+
+    std::string err;
+    expect(s.undo(err), "undo ok");
+    expect(tp.mgr.find("p2") == nullptr, "undo removed the forked profile");
+    expect(s.dirty_profiles().empty(), "undo cleans the removed profile from dirty");
+    expect(s.status(StatusStmt{"p2", ""}).find("unknown profile") != std::string::npos,
+           "status of removed profile is unknown");
+
+    tp.cleanup();
+    TEST_PASS("fork undo cleanup");
+}
+
+// ─── 片 2：MERGE 目标标脏 + SAVE 持久化回读（约束 10） ──────────────────
+// MERGE 目标 = dest（不切换 current）；affected>0 → dest 标脏 + 写序配对。
+
+TEST_CASE("sql_session_merge_dirty") {
+    auto tp = make_temp_profiles({"p1", "p2"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+    auto r0 = run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+                     "VALUES ('test:msrc','MSrc',1,1,'#minecraft:swords');");
+    expect(r0.affected == 1, "source insert ok");
+
+    s.use("p2");
+    auto m = run(s, "MERGE INTO p2 FROM p1;");
+    expect(m.message.find("merged:") == 0, "merge message prefix");
+    expect(m.affected >= 1, "merge affected > 0");
+    expect_eq(s.current(), "p2", "current unchanged by merge");
+    expect(s.dirty_profiles() == (std::vector<std::string>{"p1", "p2"}), "merge marks dest dirty");
+
+    auto sv = s.save(true);
+    expect(sv.message.find("saved: p1, p2") != std::string::npos, "save all persists both");
+
+    ProfileManager mgr2;
+    mgr2.load_directory(tp.dir);
+    const Profile* q = mgr2.find("p2");
+    expect(q != nullptr, "p2 survives reload");
+    if (q)
+        expect(q->ench().contains(NSID("test:msrc")), "merged row round-trips into p2");
+
+    tp.cleanup();
+    TEST_PASS("merge dirty");
+}
