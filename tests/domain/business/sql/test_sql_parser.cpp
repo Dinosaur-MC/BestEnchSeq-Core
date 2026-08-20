@@ -120,8 +120,8 @@ TEST_CASE("sql_parser_errors") {
     auto r = p.parse("FROB x;");
     expect(r.empty() && !p.error.empty(), "unknown statement rejected");
     SqlParser p2;
-    auto r2 = p2.parse("USE x;");
-    expect(r2.empty() && p2.error.find("unsupported") != std::string::npos, "USE unsupported in slice 1");
+    auto r2 = p2.parse("QUIT;");
+    expect(r2.empty() && p2.error.find("unsupported") != std::string::npos, "QUIT unsupported in slice 2");
     SqlParser p3;
     auto r3 = p3.parse("SELECT FROM enchantment;");
     expect(r3.empty() && !p3.error.empty(), "missing cols rejected");
@@ -137,4 +137,49 @@ TEST_CASE("sql_parser_errors") {
     const auto& u = std::get<UpdateStmt>(r6[0]);
     expect(u.where.size() == 1 && u.where[0].col.empty(), "match-all sentinel");
     TEST_PASS("parser errors");
+}
+
+TEST_CASE("sql_parser_cross_profile_statements") {
+    auto stmts = SqlParser{}.parse(
+        "USE a:b;"
+        "COPY id, name FROM src INTO enchantment WHERE id='x:y';"
+        "COPY * FROM src INTO equipment WITH DEPS, OVERRIDE;"
+        "MERGE INTO dest FROM src;"
+        "FORK src AS new_p;");
+    expect(stmts.size() == 5, "five statements");
+    expect(std::get<UseStmt>(stmts[0]).profile == "a:b", "use profile with colon");
+    const auto& c1 = std::get<CopyStmt>(stmts[1]);
+    expect(c1.source == "src" && c1.table == "enchantment" && c1.cols.size() == 2 && !c1.star, "copy cols");
+    expect(c1.where.size() == 1 && c1.where[0].col == "id" && c1.where[0].val == "x:y", "copy where");
+    const auto& c2 = std::get<CopyStmt>(stmts[2]);
+    expect(c2.star && c2.with_deps && c2.with_override && !c2.with_ignore, "copy mods");
+    const auto& m = std::get<MergeStmt>(stmts[3]);
+    expect(m.dest == "dest" && m.source == "src", "merge dest/src");
+    const auto& f = std::get<ForkStmt>(stmts[4]);
+    expect(f.source == "src" && f.dest == "new_p", "fork");
+    TEST_PASS("cross-profile statements");
+}
+
+TEST_CASE("sql_parser_copy_mods_errors") {
+    SqlParser p1;
+    auto r1 = p1.parse("COPY * FROM a INTO tags WITH DEPS, IGNORE;");
+    expect(r1.empty() && p1.error.find("mutually exclusive") != std::string::npos, "deps+ignore");
+    SqlParser p2;
+    auto r2 = p2.parse("COPY * FROM a INTO tags WITH BOGUS;");
+    expect(r2.empty() && p2.error.find("unknown WITH modifier") != std::string::npos, "unknown mod");
+    SqlParser p3;
+    auto r3 = p3.parse("COPY FROM a INTO tags;");
+    expect(r3.empty() && !p3.error.empty(), "missing cols");
+    SqlParser p4;
+    auto r4 = p4.parse("MERGE dest FROM src;");
+    expect(r4.empty() && p4.error.find("INTO") != std::string::npos, "merge missing INTO");
+    SqlParser p5;
+    auto r5 = p5.parse("FORK a b;");
+    expect(r5.empty() && p5.error.find("AS") != std::string::npos, "fork missing AS");
+    SqlParser p6;
+    auto r6 = p6.parse("USE a; FORK b AS c; COPY x FROM p INTO tags WITH OVERRIDE, OVERRIDE;");
+    // slice 1 语义：语句级错误上浮——错误语句不产出，先前语句保留（仅 lexer 错误清空全部）。
+    expect(p6.error.find("duplicate WITH") != std::string::npos, "duplicate mod");
+    expect(r6.size() == 2, "earlier statements kept, bad COPY dropped");
+    TEST_PASS("copy mods errors");
 }

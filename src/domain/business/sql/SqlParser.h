@@ -47,7 +47,28 @@ struct SaveStmt {
     bool all = false;
 };
 
-using SqlStmt = std::variant<SelectStmt, InsertStmt, UpdateStmt, DeleteStmt, StatusStmt, SaveStmt>;
+struct UseStmt {
+    std::string profile; // 不 lower（profile key 任意字符串）
+};
+struct CopyStmt {
+    std::string table;
+    std::vector<std::string> cols; // 小写
+    bool star = false;
+    std::string source;            // 不 lower
+    std::vector<WhereCond> where;  // 可空 = 全表
+    bool with_deps = false, with_ignore = false, with_override = false;
+};
+struct MergeStmt {
+    std::string source;
+    std::string dest; // 均不 lower
+};
+struct ForkStmt {
+    std::string source;
+    std::string dest; // 均不 lower
+};
+
+using SqlStmt = std::variant<SelectStmt, InsertStmt, UpdateStmt, DeleteStmt, StatusStmt, SaveStmt, UseStmt,
+                             CopyStmt, MergeStmt, ForkStmt>;
 
 class SqlParser {
 public:

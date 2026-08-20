@@ -264,6 +264,149 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
                 break;
             }
             out.push_back(std::move(s));
+        } else if (kw == "use") {
+            UseStmt s;
+            if (peek().kind != SqlToken::Kind::ident) {
+                fail("expected profile name after USE");
+                break;
+            }
+            s.profile = take().text; // profile key：不 lower
+            out.push_back(std::move(s));
+        } else if (kw == "copy") {
+            CopyStmt s;
+            if (peek().kind == SqlToken::Kind::star) {
+                take();
+                s.star = true;
+            } else {
+                while (true) {
+                    if (peek().kind != SqlToken::Kind::ident) {
+                        fail("expected column");
+                        break;
+                    }
+                    s.cols.push_back(lower(take().text));
+                    if (peek().kind == SqlToken::Kind::comma) {
+                        take();
+                        continue;
+                    }
+                    break;
+                }
+                if (s.cols.empty()) {
+                    fail("expected columns or * in COPY");
+                    break;
+                }
+            }
+            if (lower(peek().text) != "from") {
+                fail("expected FROM");
+                break;
+            }
+            take();
+            if (peek().kind != SqlToken::Kind::ident) {
+                fail("expected source profile after FROM");
+                break;
+            }
+            s.source = take().text; // 不 lower
+            if (lower(peek().text) != "into") {
+                fail("expected INTO");
+                break;
+            }
+            take();
+            s.table = lower(take().text);
+            if (!tables().count(s.table)) {
+                fail("unknown table '" + s.table + "'");
+                break;
+            }
+            if (lower(peek().text) == "where") {
+                take();
+                s.where = parse_where();
+            }
+            if (lower(peek().text) == "with") {
+                take();
+                while (true) {
+                    if (peek().kind != SqlToken::Kind::ident) {
+                        fail("expected WITH modifier (OVERRIDE|DEPS|IGNORE)");
+                        break;
+                    }
+                    const std::string mod = lower(take().text);
+                    if (mod == "deps") {
+                        if (s.with_deps) {
+                            fail("duplicate WITH DEPS");
+                            break;
+                        }
+                        s.with_deps = true;
+                    } else if (mod == "ignore") {
+                        if (s.with_ignore) {
+                            fail("duplicate WITH IGNORE");
+                            break;
+                        }
+                        s.with_ignore = true;
+                    } else if (mod == "override") {
+                        if (s.with_override) {
+                            fail("duplicate WITH OVERRIDE");
+                            break;
+                        }
+                        s.with_override = true;
+                    } else {
+                        fail("unknown WITH modifier '" + mod + "'");
+                        break;
+                    }
+                    if (peek().kind == SqlToken::Kind::comma) {
+                        take();
+                        continue;
+                    }
+                    break;
+                }
+                if (s.with_deps && s.with_ignore) {
+                    fail("WITH DEPS and WITH IGNORE are mutually exclusive");
+                    break;
+                }
+            }
+            // WITH 修饰符错误（unknown/duplicate）只 break 内层循环，须在此上浮：
+            // 与 slice 1 行为一致——任何解析错误 → 零语句返回（否则会携带半解析
+            // CopyStmt，破坏 run_sql 零执行保证）。
+            if (!error.empty())
+                break;
+            out.push_back(std::move(s));
+        } else if (kw == "merge") {
+            if (lower(peek().text) != "into") {
+                fail("expected INTO");
+                break;
+            }
+            take();
+            MergeStmt s;
+            if (peek().kind != SqlToken::Kind::ident) {
+                fail("expected destination profile after INTO");
+                break;
+            }
+            s.dest = take().text;
+            if (lower(peek().text) != "from") {
+                fail("expected FROM");
+                break;
+            }
+            take();
+            if (peek().kind != SqlToken::Kind::ident) {
+                fail("expected source profile after FROM");
+                break;
+            }
+            s.source = take().text;
+            out.push_back(std::move(s));
+        } else if (kw == "fork") {
+            ForkStmt s;
+            if (peek().kind != SqlToken::Kind::ident) {
+                fail("expected source profile after FORK");
+                break;
+            }
+            s.source = take().text;
+            if (lower(peek().text) != "as") {
+                fail("expected AS");
+                break;
+            }
+            take();
+            if (peek().kind != SqlToken::Kind::ident) {
+                fail("expected new profile name after AS");
+                break;
+            }
+            s.dest = take().text;
+            out.push_back(std::move(s));
         } else if (kw == "status") {
             StatusStmt s;
             if (peek().kind == SqlToken::Kind::ident) {
@@ -285,7 +428,8 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
             }
             out.push_back(std::move(s));
         } else {
-            fail("unsupported statement '" + kw + "' (slice 1 supports SELECT/SHOW/INSERT/UPDATE/DELETE/STATUS/SAVE)");
+            fail("unsupported statement '" + kw +
+                 "' (slice 2 supports SELECT/SHOW/INSERT/UPDATE/DELETE/STATUS/SAVE/USE/COPY/MERGE/FORK)");
             break;
         }
         if (!error.empty())

@@ -9,7 +9,7 @@ bool is_ident_start(char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 bool is_ident_char(char c) {
-    return is_ident_start(c) || (c >= '0' && c <= '9') || c == '.';
+    return is_ident_start(c) || (c >= '0' && c <= '9') || c == '.' || c == ':';
 }
 } // namespace
 
