@@ -1388,7 +1388,7 @@ TEST_CASE("cli_slice2a_subhelp") {
 
 // ---------------------------------------------------------------------------
 // Task 5 (slice 1): profile sql — BesqContext::run_sql 委托 + CLI 接线
-//   parse 矩阵 / 链式执行 / --format json / -i 片 3 错误 / --profile 未知 /
+//   parse 矩阵 / 链式执行 / --format json / -i 互斥 + REPL 会话 / --profile 未知 /
 //   链中止语义（先前成功语句保持生效）/ 脏退出警告
 // ---------------------------------------------------------------------------
 
@@ -1482,25 +1482,83 @@ TEST_CASE("cli_slice_sql_format_json") {
 TEST_CASE("cli_slice_sql_interactive") {
     register_builtin_translations(LanguageManager::instance());
     LanguageManager::instance().select("en_US");
-    {   // -i 单独 → 片 3 错误（不打印用法、不执行）
-        try {
-            const char* argv[] = {"besq", "profile", "sql", "-i"};
-            CLIApp().run(4, const_cast<char**>(argv));
-            expect(false, "-i alone should throw slice-3 error");
-        } catch (const std::runtime_error& e) {
-            expect(std::string(e.what()).find("slice 3") != std::string::npos, "error mentions slice 3");
-        }
-    }
-    {   // -i + stmt → 同样报错（语句不执行）
+    {   // -i + stmt → 互斥错误（stmt 在前）
         try {
             const char* argv[] = {"besq", "profile", "sql", "SELECT id FROM enchantment LIMIT 1;", "-i"};
             CLIApp().run(5, const_cast<char**>(argv));
-            expect(false, "-i with stmt should throw slice-3 error");
+            expect(false, "-i with stmt should throw exclusive error");
         } catch (const std::runtime_error& e) {
-            expect(std::string(e.what()).find("slice 3") != std::string::npos, "slice-3 error with stmt too");
+            expect(std::string(e.what()).find("-i") != std::string::npos, "exclusive error mentions -i");
         }
     }
-    TEST_PASS("sql interactive slice-3 error");
+    {   // stmt + -i → 同样互斥（-i 在前）
+        try {
+            const char* argv[] = {"besq", "profile", "sql", "-i", "SELECT id FROM enchantment LIMIT 1;"};
+            CLIApp().run(5, const_cast<char**>(argv));
+            expect(false, "-i then stmt should throw exclusive error");
+        } catch (const std::runtime_error& e) {
+            expect(std::string(e.what()).find("-i") != std::string::npos, "exclusive error mentions -i (order 2)");
+        }
+    }
+    TEST_PASS("sql interactive mutual exclusion");
+}
+
+TEST_CASE("cli_slice_sql_repl_basic") {
+    // stdin 管道驱动 REPL：SELECT + QUIT → 行渲染、exit 0、无错误
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    std::ostringstream out, err;
+    std::istringstream in("SELECT id FROM enchantment WHERE id='minecraft:sharpness';\nQUIT\n");
+    std::streambuf* oo = std::cout.rdbuf(out.rdbuf());
+    std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+    std::streambuf* oi = std::cin.rdbuf(in.rdbuf());
+    struct Restore { std::streambuf* o; std::streambuf* e; std::streambuf* i;
+                     ~Restore() { std::cout.rdbuf(o); std::cerr.rdbuf(e); std::cin.rdbuf(i); } } restore{oo, oe, oi};
+    const char* argv[] = {"besq", "profile", "sql", "-i"};
+    int rc = CLIApp().run(4, const_cast<char**>(argv));
+    expect(rc == 0, "repl exit 0");
+    expect(out.str().find("profile> ") != std::string::npos, "prompt shown");
+    expect(out.str().find("minecraft:sharpness") != std::string::npos, "SELECT row rendered");
+    expect(err.str().empty(), "no stderr on clean repl");
+    TEST_PASS("sql repl basic");
+}
+
+TEST_CASE("cli_slice_sql_repl_session") {
+    // 多行续行（...> 提示）/ 省略分号 / 错误不退出 / 跨调用 UNDO / 退出脏警告
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    std::ostringstream out, err;
+    std::istringstream in(
+        "SELECT id,\n"
+        " name FROM enchantment WHERE id='minecraft:sharpness';\n"
+        "FROB x;\n"
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('test:repl','R',1,1,'#minecraft:swords');\n"
+        "SELECT id FROM enchantment WHERE id='test:repl'\n"
+        "UNDO;\n"
+        "SELECT id FROM enchantment WHERE id='test:repl';\n"
+        "QUIT\n");
+    std::streambuf* oo = std::cout.rdbuf(out.rdbuf());
+    std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+    std::streambuf* oi = std::cin.rdbuf(in.rdbuf());
+    struct Restore { std::streambuf* o; std::streambuf* e; std::streambuf* i;
+                     ~Restore() { std::cout.rdbuf(o); std::cerr.rdbuf(e); std::cin.rdbuf(i); } } restore{oo, oe, oi};
+    const char* argv[] = {"besq", "profile", "sql", "-i"};
+    int rc = CLIApp().run(4, const_cast<char**>(argv));
+    expect(rc == 0, "repl exit 0");
+    const std::string so = out.str(), se = err.str();
+    expect(so.find("...> ") != std::string::npos, "continuation prompt shown");
+    expect(so.find("minecraft:sharpness") != std::string::npos, "multiline select rendered");
+    expect(se.find("unsupported statement 'frob'") != std::string::npos, "hard error on stderr");
+    expect(so.find("undo: reverted") != std::string::npos, "undo confirmation");
+    // 插入后 SELECT 可见一次；UNDO 后 SELECT 不再可见 → 全 stdout 恰一次
+    size_t count = 0;
+    for (size_t pos = so.find("test:repl"); pos != std::string::npos; pos = so.find("test:repl", pos + 1))
+        ++count;
+    expect_eq(count, 1u, "row visible after insert, gone after undo");
+    expect(se.find("unsaved") != std::string::npos, "dirty warning on QUIT");
+    expect(se.find("builtin:vanilla") != std::string::npos, "warning names the dirty profile");
+    TEST_PASS("sql repl session");
 }
 
 TEST_CASE("cli_slice_sql_unknown_profile") {

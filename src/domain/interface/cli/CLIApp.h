@@ -76,7 +76,7 @@ public:
         std::string sql_stmt;        // 位置参数：SQL 语句串（分号分隔链）
         std::string sql_profile;     // --profile：会话初始工作 profile（空 = ctx 当前激活）
         std::string sql_format = "text"; // --format：text | json
-        bool sql_interactive = false;    // -i：片 1 解析接受，执行报片 3 错误
+        bool sql_interactive = false;    // -i：交互式 REPL（与 stmt 互斥）
         // algo 动作
         AlgoAction algo_action = AlgoAction::none;
         std::string algo_target;         // set_dir <dir>
@@ -117,6 +117,18 @@ private:
 
     int run_profile(const Config& config);
     int run_algo(const Config& config);
+
+    /// profile sql -i：交互式 REPL 循环（行驱动/多行续行/HELP·QUIT/错误不退出/
+    /// 跨语句 UNDO/退出脏警告）。常驻 SqlSession 由 create_sql_session 提供。
+    int run_sql_repl(const Config& config);
+
+    /// 逐条语句消息输出（从 stmt 分支 inline 逻辑抽取，行为逐字节不变）：
+    /// text → stdout；json → stderr（stdout 保持纯 JSON）；"saved: " 前缀本地化。
+    /// REPL（\p errors_to_stderr=true）时错误消息（sql_message_is_error）始终走 stderr。
+    void print_sql_messages(std::span<const business::sql::SqlResult> steps,
+                            const std::string& format, bool errors_to_stderr);
+    /// 最后一条语句结果渲染（json 数组 / text 对齐表格 + 数值列启发）。
+    void print_sql_result(const business::sql::SqlResult& r, const std::string& format);
 
     BesqContext _ctx;
 

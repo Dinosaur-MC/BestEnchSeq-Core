@@ -574,9 +574,12 @@ int CLIApp::run_profile(const Config& config) {
             return 0;
         }
         case Config::ProfileAction::sql: {
-            // -i：片 1 仅解析接受，执行报片 3 错误（先于 stmt 检查——不给 REPL 暗示）
+            // -i 与 <stmt> 互斥（替代片 3 的 REPL 占位错误）
+            if (config.sql_interactive && !config.sql_stmt.empty())
+                throw std::runtime_error(tr("cli.err.sql_repl_exclusive"));
+            // -i：交互式 REPL（行驱动/多行续行/HELP·QUIT/错误不退出/常驻会话）
             if (config.sql_interactive)
-                throw std::runtime_error(tr("cli.err.sql_repl_slice3"));
+                return run_sql_repl(config);
             // 无 stmt + 无 -i：打印简短用法（exit 0）
             if (config.sql_stmt.empty()) {
                 std::cout << "profile sql -i\n";
@@ -604,56 +607,9 @@ int CLIApp::run_profile(const Config& config) {
                 throw std::runtime_error(error);
             }
 
-            // 逐条消息：text → stdout；json → stderr（保持 stdout 纯 JSON 机器输出）
-            for (const auto& step : result.steps) {
-                if (step.message.empty())
-                    continue;
-                std::string msg = step.message;
-                // SAVE 成功消息（"saved: a, b"）本地化；STATUS 摘要等保持原文
-                if (msg.starts_with("saved: "))
-                    msg = tr_fmt("cli.msg.sql_saved", msg.substr(7));
-                if (config.sql_format == "json")
-                    std::cerr << msg << "\n";
-                else
-                    std::cout << msg << "\n";
-            }
-            // 最后一条结果渲染：json → 数组（[表头, 行...]）；text → 对齐表格
-            if (config.sql_format == "json") {
-                Json arr = Json::array();
-                Json headers = Json::array();
-                for (const auto& h : result.last.headers)
-                    headers.push_back(Json(h));
-                arr.push_back(std::move(headers));
-                for (const auto& row : result.last.rows) {
-                    Json r = Json::array();
-                    for (const auto& cell : row)
-                        r.push_back(Json(cell));
-                    arr.push_back(std::move(r));
-                }
-                std::cout << arr.to_string() << "\n";
-            } else if (!result.last.headers.empty()) {
-                // 数值列启发：列内全部单元格为整数字符串 → 右对齐
-                auto is_int_str = [](const std::string& s) {
-                    if (s.empty())
-                        return false;
-                    size_t i = (s[0] == '-' || s[0] == '+') ? 1 : 0;
-                    if (i >= s.size())
-                        return false;
-                    for (; i < s.size(); ++i)
-                        if (!std::isdigit(static_cast<unsigned char>(s[i])))
-                            return false;
-                    return true;
-                };
-                std::vector<bool> numeric(result.last.headers.size(), false);
-                for (size_t c = 0; c < result.last.headers.size(); ++c) {
-                    bool all_int = !result.last.rows.empty();
-                    for (const auto& row : result.last.rows) {
-                        if (c >= row.size() || !is_int_str(row[c])) { all_int = false; break; }
-                    }
-                    numeric[c] = all_int;
-                }
-                print_aligned_table(result.last.headers, result.last.rows, numeric);
-            }
+            // 逐条消息 + 最后一条结果渲染（抽取的共享辅助；行为逐字节不变）
+            print_sql_messages(result.steps, config.sql_format, /*errors_to_stderr=*/false);
+            print_sql_result(result.last, config.sql_format);
             flush_output();
             // 脏退出警告（stderr，exit 0）：任一语句写过且未 SAVE
             if (!result.dirty.empty())
@@ -665,6 +621,213 @@ int CLIApp::run_profile(const Config& config) {
             // 无动作（如 `besq profile` 裸命令）不再静默成功——按解析失败处理
             throw std::runtime_error(tr("cli.err.parse_failed"));
     }
+}
+
+// ============================================================================
+// profile sql 渲染共享辅助（stmt 分支 inline 逻辑抽取，行为逐字节不变）
+// ============================================================================
+
+void CLIApp::print_sql_messages(std::span<const business::sql::SqlResult> steps,
+                                const std::string& format, bool errors_to_stderr) {
+    for (const auto& step : steps) {
+        if (step.message.empty())
+            continue;
+        std::string msg = step.message;
+        // SAVE 成功消息（"saved: a, b"）本地化；STATUS 摘要等保持原文
+        if (msg.starts_with("saved: "))
+            msg = tr_fmt("cli.msg.sql_saved", msg.substr(7));
+        // REPL（errors_to_stderr）：语句错误始终走 stderr（交互下错误更清晰）；
+        // 非交互 stmt 分支：text → stdout，json → stderr（stdout 保持纯 JSON）
+        if (format == "json" || (errors_to_stderr && _ctx.sql_message_is_error(step.message)))
+            std::cerr << msg << "\n";
+        else
+            std::cout << msg << "\n";
+    }
+}
+
+void CLIApp::print_sql_result(const business::sql::SqlResult& r, const std::string& format) {
+    if (format == "json") {
+        // json → 数组（[表头, 行...]）
+        Json arr = Json::array();
+        Json headers = Json::array();
+        for (const auto& h : r.headers)
+            headers.push_back(Json(h));
+        arr.push_back(std::move(headers));
+        for (const auto& row : r.rows) {
+            Json rr = Json::array();
+            for (const auto& cell : row)
+                rr.push_back(Json(cell));
+            arr.push_back(std::move(rr));
+        }
+        std::cout << arr.to_string() << "\n";
+        return;
+    }
+    if (r.headers.empty())
+        return;
+    // text → 对齐表格；数值列启发：列内全部单元格为整数字符串 → 右对齐
+    auto is_int_str = [](const std::string& s) {
+        if (s.empty())
+            return false;
+        size_t i = (s[0] == '-' || s[0] == '+') ? 1 : 0;
+        if (i >= s.size())
+            return false;
+        for (; i < s.size(); ++i)
+            if (!std::isdigit(static_cast<unsigned char>(s[i])))
+                return false;
+        return true;
+    };
+    std::vector<bool> numeric(r.headers.size(), false);
+    for (size_t c = 0; c < r.headers.size(); ++c) {
+        bool all_int = !r.rows.empty();
+        for (const auto& row : r.rows) {
+            if (c >= row.size() || !is_int_str(row[c])) { all_int = false; break; }
+        }
+        numeric[c] = all_int;
+    }
+    print_aligned_table(r.headers, r.rows, numeric);
+}
+
+// ============================================================================
+// run_sql_repl — profile sql -i 交互式 REPL 循环（片 3）
+// ============================================================================
+// 行驱动规则（plan 全局约束 5）：
+//   - 读行 trim；空行跳过；`quit`/`help`（trim + 去尾部 ';' + 大小写不敏感）拦截；
+//   - 其余行追加到累积缓冲 B（保留换行）；
+//   - 提交判定：B trim 后以 ';' 结尾 → 提交；否则 parse(B) —— 成功 → 提交（分号
+//     可省略）；error 含 "expected" → 续行（...> 提示）；否则硬错误（stderr，清 B）；
+//   - 提交 = parse(B) → 逐条 session.execute（失败停止该批，错误不退出）→ 渲染；
+//   - UNDO 不是语句（parser 报 unsupported）：trim + 去尾部 ';' 后大小写不敏感
+//     恰为 "undo" → 直接 session.undo；
+//   - EOF：B 非空 → 同提交语义执行；QUIT/EOF → 脏警告（stderr）→ return 0。
+// 交互 UI（提示符/HELP/undo 确认）text → stdout；json → stderr（stdout 纯 JSON）。
+
+int CLIApp::run_sql_repl(const Config& config) {
+    if (config.sql_format != "text" && config.sql_format != "json")
+        throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.sql_format));
+    _ctx.load_profiles();
+    // 工作 profile：--profile 显式 > ctx 当前激活；未知 → 预校验干净报错
+    const std::string prof = config.sql_profile.empty() ? _ctx.active_profile() : config.sql_profile;
+    if (!_ctx.profile_exists(prof))
+        throw std::runtime_error(tr_fmt("cli.err.profile_not_found", prof));
+    auto sess = _ctx.create_sql_session(prof);
+
+    std::string buffer;   // 累积缓冲 B（保留换行）
+
+    // 交互 UI 输出：text → stdout；json → stderr（stdout 保持纯 JSON 机器输出）
+    auto ui_out = [&]() -> std::ostream& {
+        return config.sql_format == "json" ? std::cerr : std::cout;
+    };
+    // "undo" 命令判定：trim + 去尾部 ';' + 大小写不敏感
+    auto is_undo = [](const std::string& t) {
+        std::string s = t;
+        while (!s.empty() && s.back() == ';')
+            s.pop_back();
+        s = string_utils::trim(s);
+        return string_utils::to_lower(s) == "undo";
+    };
+    // UNDO 分发：成功 → `undo: reverted`；失败 → err（stderr）
+    auto do_undo = [&]() {
+        std::string err;
+        if (sess->undo(err))
+            ui_out() << "undo: reverted\n";
+        else
+            std::cerr << (err.empty() ? "undo: nothing to undo" : err) << "\n";
+    };
+    // 解析 + 逐条执行（失败停止该批，与链式一致）+ 渲染（不修改 buffer）
+    auto run_batch = [&](const std::string& src) {
+        business::sql::SqlParser parser;
+        std::vector<business::sql::SqlStmt> stmts = parser.parse(src);
+        if (!parser.error.empty()) {
+            std::cerr << parser.error << "\n";   // 提交时解析失败 → 硬错误（stderr）
+            return;
+        }
+        std::vector<business::sql::SqlResult> batch;
+        business::sql::SqlResult last;
+        for (const auto& stmt : stmts) {
+            business::sql::SqlResult r;
+            try {
+                r = sess->execute(stmt);
+            } catch (const std::exception& e) {
+                r.message = e.what();
+            }
+            batch.push_back(r);
+            last = r;
+            if (_ctx.sql_message_is_error(r.message))
+                break;   // 语句失败 → 停止该批（错误不退出 REPL）
+        }
+        print_sql_messages(batch, config.sql_format, /*errors_to_stderr=*/true);
+        print_sql_result(last, config.sql_format);
+    };
+    // 提交累积缓冲 B（UNDO 命令先分发）
+    auto submit_buffer = [&]() {
+        if (is_undo(string_utils::trim(buffer)))
+            do_undo();
+        else
+            run_batch(buffer);
+        buffer.clear();
+    };
+
+    while (true) {
+        ui_out() << (buffer.empty() ? "profile> " : "...> ") << std::flush;
+        std::string line;
+        if (!std::getline(std::cin, line))
+            break;   // EOF
+        const std::string tline = string_utils::trim(line);
+        if (tline.empty())
+            continue;
+        // QUIT / HELP：trim + 去尾部 ';' + 大小写不敏感
+        std::string cmd = tline;
+        while (!cmd.empty() && cmd.back() == ';')
+            cmd.pop_back();
+        cmd = string_utils::trim(cmd);
+        const std::string ccmd = string_utils::to_lower(cmd);
+        if (ccmd == "quit")
+            break;
+        if (ccmd == "help") {
+            ui_out() << tr("cli.help.sql_repl") << "\n";
+            continue;
+        }
+        // 其余行 → 追加到 B
+        buffer += line;
+        buffer += "\n";
+
+        // 提交判定
+        const std::string tb = string_utils::trim(buffer);
+        if (is_undo(tb)) {                     // UNDO（无分号形态；有分号形态走提交）
+            do_undo();
+            buffer.clear();
+            continue;
+        }
+        if (!tb.empty() && tb.back() == ';') { // (a) 分号提交
+            submit_buffer();
+            continue;
+        }
+        business::sql::SqlParser parser;       // (b) 省略分号判定
+        parser.parse(buffer);
+        if (parser.error.empty()) {
+            submit_buffer();
+            continue;
+        }
+        if (parser.error.find("expected") != std::string::npos)
+            continue;                          // 续行（下一轮 ...> 提示，B 保留）
+        std::cerr << parser.error << "\n";     // 硬错误（stderr，清 B）
+        buffer.clear();
+    }
+
+    // EOF/QUIT 残余缓冲：非空 → 同提交语义（UNDO / 解析执行）
+    if (!string_utils::trim(buffer).empty()) {
+        if (is_undo(string_utils::trim(buffer)))
+            do_undo();
+        else
+            run_batch(buffer);
+    }
+
+    // 退出脏警告（stderr，exit 0；REPL 不自动 SAVE）
+    const auto dirty = sess->dirty_profiles();
+    if (!dirty.empty())
+        std::cerr << tr_fmt("cli.msg.sql_unsaved", string_utils::join(dirty, ", ")) << "\n";
+    flush_output();
+    return 0;
 }
 
 int CLIApp::run_algo(const Config& config) {
