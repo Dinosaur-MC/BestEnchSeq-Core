@@ -388,35 +388,51 @@ std::string BesqContext::export_profile_to_string() const {
 // Profile SQL（profile sql 片 1：链式执行）
 // ====================================================================
 
-namespace {
+std::string BesqContext::resolve_profiles_dir() const {
+    std::string dir = _impl->profiles_dir;
+    if (dir.empty())
+        dir = AppConfig::get().profiles_dir;
+    if (dir.empty()) {
+        const auto exe = exe_dir();
+        dir = (exe.empty() ? std::filesystem::current_path() / "profiles" : exe / "profiles").string();
+    }
+    return dir;
+}
 
-/// 语句结果是否为错误（区别于成功信息形态）：
-/// 成功形态：空 message（SELECT）、"N row(s) affected"（写，含 0）、
+/// 语句消息是否为错误（区别于成功信息形态）——run_sql 链中止判定与 REPL 共用
+/// 的单一白名单实现（不得在 CLIApp 复制第二份）：
+/// 成功形态：空消息（SELECT）、"N row(s) affected"（写，含 0）、
 /// "saved: ..." / "nothing to save"（SAVE）、"profile: ..."（STATUS 摘要）、
 /// "use: ..."（USE）、"forked: ..."（FORK）、"merged: ..."（MERGE）。
 /// 其余非空 message（unknown table/column、FK violation、already exists、
 /// cannot delete、unknown profile、save failed 等）均为语句错误 → 中止链。
-bool sql_statement_failed(const business::sql::SqlResult& r) {
-    if (r.message.empty())
+bool BesqContext::sql_message_is_error(const std::string& message) const {
+    if (message.empty())
         return false;
-    if (r.message.ends_with("row(s) affected"))
+    if (message.ends_with("row(s) affected"))
         return false;
-    if (r.message == "nothing to save")
+    if (message == "nothing to save")
         return false;
-    if (r.message.starts_with("saved: "))
+    if (message.starts_with("saved: "))
         return false;
-    if (r.message.starts_with("profile: "))
+    if (message.starts_with("profile: "))
         return false;
-    if (r.message.starts_with("use: "))
+    if (message.starts_with("use: "))
         return false;
-    if (r.message.starts_with("forked: "))
+    if (message.starts_with("forked: "))
         return false;
-    if (r.message.starts_with("merged: "))
+    if (message.starts_with("merged: "))
         return false;
     return true;
 }
 
-} // namespace
+std::unique_ptr<business::sql::SqlSession>
+BesqContext::create_sql_session(const std::string& profile) {
+    auto session = std::make_unique<business::sql::SqlSession>(_impl->profiles, resolve_profiles_dir());
+    if (!profile.empty())
+        session->use(profile); // 未知 profile → std::runtime_error 传播（调用方预校验）
+    return session;
+}
 
 BesqContext::SqlRunResult BesqContext::run_sql(const std::string& statements,
                                                const std::string& profile,
@@ -435,14 +451,7 @@ BesqContext::SqlRunResult BesqContext::run_sql(const std::string& statements,
     // 2. 会话：调用内新建（自包含——片 1 CLI 每进程一次调用，dirty 经返回值
     //    上抛，无需跨调用会话状态）。profiles_dir 与 load_profiles() 同解析：
     //    set_profiles_dir 覆盖 > AppConfig::get().profiles_dir > <exe_dir>/profiles。
-    std::string dir = _impl->profiles_dir;
-    if (dir.empty())
-        dir = AppConfig::get().profiles_dir;
-    if (dir.empty()) {
-        const auto exe = exe_dir();
-        dir = (exe.empty() ? std::filesystem::current_path() / "profiles" : exe / "profiles").string();
-    }
-    business::sql::SqlSession session(_impl->profiles, dir);
+    business::sql::SqlSession session(_impl->profiles, resolve_profiles_dir());
     if (!profile.empty()) {
         try {
             session.use(profile);
@@ -464,7 +473,7 @@ BesqContext::SqlRunResult BesqContext::run_sql(const std::string& statements,
         }
         out.steps.push_back(r);
         out.last = r;
-        if (sql_statement_failed(r)) {
+        if (sql_message_is_error(r.message)) {
             error = tr_fmt("cli.err.sql_stmt_failed", i + 1, r.message);
             out.dirty = session.dirty_profiles();
             return out;

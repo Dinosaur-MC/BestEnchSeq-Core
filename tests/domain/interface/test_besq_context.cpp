@@ -8,6 +8,7 @@
 #include "besq/besq.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/sql/SqlParser.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/cli/CLIApp.h"
 #include "domain/interface/cli/EnchParser.h"
@@ -1140,6 +1141,93 @@ TEST_CASE("test_algorithm_detail_and_unload_gate") {
     expect(threw, "unknown algorithm detail throws");
 
     TEST_PASS("BesqContext algorithm detail + unload gate");
+}
+
+// ---------------------------------------------------------------------------
+// Test: create_sql_session — 常驻会话工厂（片 3 REPL 消费）
+//   会话由调用方持有，跨 execute() 调用保持 USE/UNDO 栈/脏集合/基线。
+//   片 1 的 run_sql 每次新建会话做不到跨调用 UNDO —— 本测试是片 3 回归门。
+// ---------------------------------------------------------------------------
+
+TEST_CASE("sql_create_session_use_and_resident_undo") {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // 工厂返回会话：use(p) 后 current()==p。
+    auto session = ctx.create_sql_session("builtin:vanilla");
+    expect(session != nullptr, "create_sql_session returns a session");
+    expect_eq(session->current(), "builtin:vanilla", "session current() == profile after factory use");
+
+    // 跨调用状态保持：INSERT（一次 execute）→ SELECT 回读（另一次 execute）→
+    // UNDO（session.undo——UNDO 非语句，无 SqlStmt 变体）→ SELECT 不见行。
+    business::sql::SqlParser parser;
+    auto ins = session->execute(parser.parse(
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('test:resident','R',1,1,'#minecraft:swords');")[0]);
+    expect(ins.affected == 1, "INSERT via session.execute ok");
+    expect_eq(ins.message, "1 row(s) affected", "insert message");
+
+    auto sel = session->execute(parser.parse("SELECT id FROM enchantment WHERE id='test:resident';")[0]);
+    expect(sel.rows.size() == 1 && sel.rows[0][0] == "test:resident",
+           "SELECT sees the inserted row (cross-call state kept)");
+
+    std::string err;
+    expect(session->undo(err), "UNDO ok");
+    expect(err.empty(), "undo err empty on success");
+
+    auto sel2 = session->execute(parser.parse("SELECT id FROM enchantment WHERE id='test:resident';")[0]);
+    expect(sel2.rows.empty(), "SELECT sees nothing after UNDO (cross-call undo regression gate)");
+
+    // 会话存活且状态连续：UNDO 后再 INSERT 另一行，SELECT 仍可见（会话未失效）。
+    session->execute(parser.parse(
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('test:resident2','R2',1,1,'#minecraft:swords');")[0]);
+    auto sel3 = session->execute(parser.parse("SELECT id FROM enchantment WHERE id='test:resident2';")[0]);
+    expect(sel3.rows.size() == 1, "session still usable after UNDO");
+
+    TEST_PASS("BesqContext create_sql_session resident undo");
+}
+
+TEST_CASE("sql_create_session_unknown_profile_throws") {
+    BesqContext ctx;
+    ctx.load_builtin();
+    expect_throws_as<std::runtime_error>([&] { ctx.create_sql_session("nope_nope"); },
+                                         "create_sql_session unknown profile throws std::runtime_error");
+    TEST_PASS("BesqContext create_sql_session unknown profile");
+}
+
+// ---------------------------------------------------------------------------
+// Test: sql_message_is_error — 失败判定公开化（单一白名单：空消息 / `N row(s)
+//   affected` 后缀 / `nothing to save` / `saved: `、`profile: `、`use: `、
+//   `forked: `、`merged: ` 前缀 → 非错误；其余非空消息 → 错误）。
+//   run_sql 链中止判定与 REPL 共用此实现（不得在 CLIApp 复制第二份白名单）。
+// ---------------------------------------------------------------------------
+
+TEST_CASE("sql_message_is_error_truth_table") {
+    BesqContext ctx;
+
+    // 成功形态 → false。
+    expect(!ctx.sql_message_is_error(""), "empty message is not an error");
+    expect(!ctx.sql_message_is_error("1 row(s) affected"), "'1 row(s) affected' is not an error");
+    expect(!ctx.sql_message_is_error("0 row(s) affected"), "'0 row(s) affected' is not an error");
+    expect(!ctx.sql_message_is_error("nothing to save"), "'nothing to save' is not an error");
+    expect(!ctx.sql_message_is_error("saved: a"), "'saved: a' is not an error");
+    expect(!ctx.sql_message_is_error("saved: a, b"), "'saved: a, b' is not an error");
+    expect(!ctx.sql_message_is_error("profile: x"), "'profile: x' is not an error");
+    expect(!ctx.sql_message_is_error("profile: x (dirty)"), "'profile: x (dirty)' is not an error");
+    expect(!ctx.sql_message_is_error("use: x"), "'use: x' is not an error");
+    expect(!ctx.sql_message_is_error("forked: x"), "'forked: x' is not an error");
+    expect(!ctx.sql_message_is_error("merged: 3 row(s) from a into b"), "'merged: ...' is not an error");
+
+    // 错误形态 → true。
+    expect(ctx.sql_message_is_error("unknown profile 'x'"), "'unknown profile' is an error");
+    expect(ctx.sql_message_is_error("parse error at token 1: ..."), "'parse error' is an error");
+    expect(ctx.sql_message_is_error("FK violation: ..."), "'FK violation' is an error");
+    expect(ctx.sql_message_is_error("unknown column 'x'"), "'unknown column' is an error");
+    expect(ctx.sql_message_is_error("enchantment requires max_level>=1 and multiplier>=1"),
+           "validation error is an error");
+
+    TEST_PASS("BesqContext sql_message_is_error truth table");
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 
 #include "domain/algorithm/types/AlgorithmState.h"
 #include "domain/business/sql/SqlExecutor.h"   // business::sql::SqlResult（run_sql 返回类型）
+#include "domain/business/sql/SqlSession.h"    // create_sql_session 返回的常驻会话（调用方持有）
 #include "domain/orchestration/orchestration.h"
 #include "domain/orchestration/types/SolveSnapshot.h"
 
@@ -229,6 +230,21 @@ public:
     /// 默认 <exe_dir>/profiles，与 load_profiles() 同解析）。
     SqlRunResult run_sql(const std::string& statements, const std::string& profile, std::string& error);
 
+    /// 常驻 SQL 会话工厂（片 3 REPL 消费）。profiles_dir 解析与 run_sql 同规则
+    /// （set_profiles_dir 覆盖 > AppConfig::get().profiles_dir > <exe_dir>/profiles），
+    /// 并以 \p profile 为会话初始工作 profile（未知 → std::runtime_error 传播；
+    /// 调用方先用 profile_exists 预校验）。返回的会话由调用方持有（unique_ptr），
+    /// 跨 execute() 调用保持 USE/UNDO 栈/脏集合/基线——片 1 的 run_sql 每次新建
+    /// 会话做不到跨调用状态。
+    std::unique_ptr<business::sql::SqlSession> create_sql_session(const std::string& profile);
+
+    /// 语句消息是否为错误（区别于成功信息形态），run_sql 链中止判定与 REPL 共用：
+    /// 成功（非错误）= 空消息、`N row(s) affected` 后缀、`nothing to save`、
+    /// 或 `saved: `/`profile: `/`use: `/`forked: `/`merged: ` 前缀；
+    /// 其余非空消息（unknown table/column、FK violation、already exists、
+    /// cannot delete、unknown profile、save failed 等）→ 错误。
+    bool sql_message_is_error(const std::string& message) const;
+
     // ── Registry access (active profile, read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;
     const EquipmentRegistry& equipment() const noexcept;
@@ -316,6 +332,11 @@ private:
     /// 当前激活的有效视图：组合时 = resolve_effective_group(成员)，否则 =
     /// resolve_effective(active_name())。所有求解/查看/导出消费点统一走这里。
     const Profile& _resolve_active() const;
+
+    /// profiles_dir 解析链（run_sql / create_sql_session 共用单一实现）：
+    /// set_profiles_dir 覆盖 > AppConfig::get().profiles_dir > 默认
+    /// <exe_dir>/profiles（exe_dir 不可用时回退 <cwd>/profiles）。
+    std::string resolve_profiles_dir() const;
 
     struct Impl;
     std::unique_ptr<Impl> _impl;
