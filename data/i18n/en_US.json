@@ -121,6 +121,7 @@
     "cli.help.file_desc": "Output file path ('-' = stdout)",
     "cli.help.export_format_desc": "Export format: json, csv, or datapack",
     "cli.help.inspect_format_desc": "Output format: text or json",
+    "cli.help.effective_desc": "Inspect the dependency-merged effective view (instead of the profile's own data)",
     "cli.help.sql_stmt_desc": "SQL statements to run (semicolon-separated chain)",
     "cli.help.sql_profile_desc": "Working profile for the session (default: active profile)",
     "cli.help.sql_interactive_desc": "Enter the interactive SQL REPL",

@@ -443,7 +443,13 @@ int CLIApp::run_profile(const Config& config) {
             _ctx.load_profiles();
             if (!_ctx.profile_exists(config.profile_target))
                 throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.profile_target));
-            const Profile& p = _ctx.profile(config.profile_target);
+            // --effective：数据源 = 依赖合并有效视图（solve 消费同一视图，
+            // BesqContext::effective_profile）；缺省 = 自身数据（行为零改动）。
+            // 未知 profile 已由上方 profile_exists 预校验报同一本地化错误，
+            // effective_profile 的抛异常路径（未知/依赖环）不会到达 CLI 层。
+            const Profile& p = config.inspect_effective
+                ? _ctx.effective_profile(config.profile_target)
+                : _ctx.profile(config.profile_target);
             // ── 收集行（filter → fields → 分页；count = 过滤后分页前）──
             // 列定义保持全列（headers/numeric/bool_cols 永不收缩为字段子集）；
             // --fields 只在行循环前算一次全列下标子集 selected，逐行按全列下标取
@@ -982,7 +988,7 @@ const auto PROFILE_OPTS = OptionTable{
             Option<std::string>{.long_name = "tag",     .help_key = "cli.help.publish_tag_desc"},
         }},
     Command<Positional<std::string>, Positional<std::string>,
-            Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>{
+            Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>, Flag>{
         .name = "inspect", .help_key = "cli.cmd.inspect_desc",
         .table = OptionTable{
             Positional<std::string>{.name = "profile", .help_key = "cli.help.profile_desc"},
@@ -992,6 +998,7 @@ const auto PROFILE_OPTS = OptionTable{
             Option<int>{.long_name = "limit", .help_key = "cli.help.limit_desc", .default_v = 0},
             Option<int>{.long_name = "page",  .help_key = "cli.help.page_desc",  .default_v = 1},
             Option<std::string>{.long_name = "format", .help_key = "cli.help.inspect_format_desc", .default_v = std::string("text")},
+            Flag{.long_name = "effective", .help_key = "cli.help.effective_desc"},
         }},
     Command<Positional<std::string>, Option<std::string>, Flag, Option<std::string>>{
         .name = "sql", .help_key = "cli.cmd.sql_desc",
@@ -1054,7 +1061,7 @@ const auto BESQ_OPTIONS = OptionTable{
         .name = "solve", .alias = "calc", .help_key = "cli.cmd.solve_desc",
         .table = SOLVE_CMD_OPTS,
     },
-    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>, Positional<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>>, Command<Positional<std::string>, Option<std::string>, Flag, Option<std::string>>>{
+    Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>>, Command<Option<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>, Option<std::string>>, Command<Positional<std::string>, Positional<std::string>, Option<std::string>, Option<std::string>, Option<int>, Option<int>, Option<std::string>, Flag>, Command<Positional<std::string>, Option<std::string>, Flag, Option<std::string>>>{
         .name = "profile", .help_key = "cli.cmd.profile_desc", .table = PROFILE_OPTS,
     },
     Command<Flag, Flag, Flag, Command<>, Command<Positional<std::string>>, Command<Positional<std::string>, Option<std::string>>>{

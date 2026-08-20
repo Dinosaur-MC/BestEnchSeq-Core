@@ -121,6 +121,7 @@
     "cli.help.file_desc": "输出文件路径（'-' = stdout）",
     "cli.help.export_format_desc": "导出格式: json、csv 或 datapack",
     "cli.help.inspect_format_desc": "输出格式: text 或 json",
+    "cli.help.effective_desc": "检查依赖合并后的有效视图（而非 profile 自身数据）",
     "cli.help.sql_stmt_desc": "要执行的 SQL 语句（分号分隔的链式）",
     "cli.help.sql_profile_desc": "会话工作 profile（默认: 当前激活 profile）",
     "cli.help.sql_interactive_desc": "进入交互式 SQL REPL",

@@ -71,6 +71,7 @@ public:
         int inspect_limit = 0;                 // 0 = 全部
         int inspect_page  = 1;
         std::string inspect_format = "text";
+        bool inspect_effective = false;        // --effective：数据源 = 依赖合并有效视图
         std::vector<std::string_view> command_path;   // Task 6 用；本任务先填充
         // sql 动作
         std::string sql_stmt;        // 位置参数：SQL 语句串（分号分隔链）
@@ -198,7 +199,8 @@ private:
             cfg.inspect_fields = std::get<3>(i.value).value_or(Config{}.inspect_fields);
             cfg.inspect_limit  = std::get<4>(i.value).value_or(Config{}.inspect_limit);
             cfg.inspect_page   = std::get<5>(i.value).value_or(Config{}.inspect_page);
-            cfg.inspect_format = std::get<6>(i.value).value_or(Config{}.inspect_format); }
+            cfg.inspect_format = std::get<6>(i.value).value_or(Config{}.inspect_format);
+            cfg.inspect_effective = std::get<7>(i.value); }
         else if (std::get<10>(v).has_value()) {               cfg.profile_action = Config::ProfileAction::sql;
             const auto& s = *std::get<10>(v);
             cfg.sql_stmt        = std::get<0>(s.value).value_or(Config{}.sql_stmt);

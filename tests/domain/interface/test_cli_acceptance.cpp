@@ -7,6 +7,7 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
+#include "AppConfig.h"
 #include "domain/interface/components/BuiltinI18n.h"
 #include "common/i18n/Language.h"
 #include "common/utils/EnvUtil.hpp"
@@ -1219,6 +1220,99 @@ TEST_CASE("cli_slice2a_inspect_fields_alignment") {
         expect(id_keys == 2, "json rows have exactly one id key each (2 rows, 2 id keys)");
     }
     TEST_PASS("inspect fields alignment");
+}
+
+// ---------------------------------------------------------------------------
+// Task 3 (spec §2): profile inspect --effective — 有效视图数据源
+//   - parse：--effective 绑定 inspect_effective；缺省 false
+//   - 正向：依赖链 top_pack → mid_pack → builtin:vanilla；inspect --effective
+//     显示依赖合并行（vanilla sharpness 经 mid_pack 覆写为 max_level 7）
+//   - 缺省：仅自身数据（mod:ember），无依赖行 —— 行为零改动
+//   - 未知 profile + --effective：同缺省干净报错
+// ---------------------------------------------------------------------------
+TEST_CASE("cli_slice2a_inspect_effective") {
+    // ── parse 绑定 ──
+    {
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench", "--effective"};
+        auto cfg = CLIApp::parse(6, const_cast<char**>(argv));
+        expect(cfg.inspect_effective, "--effective binds");
+    }
+    {
+        const char* argv[] = {"besq", "profile", "inspect", "builtin:vanilla", "ench"};
+        auto cfg = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(!cfg.inspect_effective, "default (no --effective) false");
+    }
+
+    // ── 临时 profiles 目录：top_pack（自身 mod:ember）→ mid_pack（覆写 vanilla
+    //    sharpness max_level 5→7）→ builtin:vanilla（load_directory 不 cross_validate，
+    //    依赖链在 inspect 时经 resolve_effective 懒解析，加载顺序无关）──
+    static int counter = 0;
+    const std::string tmp =
+        (std::filesystem::temp_directory_path() / ("besq_insp_eff_" + std::to_string(++counter))).string();
+    std::error_code ec;
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp, ec);
+    {
+        std::ofstream f(std::filesystem::path(tmp) / "mid_pack.json");
+        f << R"({"name":"mid_pack","dependencies":["builtin:vanilla"],
+                  "enchantments":[{"id":"minecraft:sharpness","name":"Sharpness","platform":"java",
+                                   "max_level":7,"multiplier":1,
+                                   "supported_items":["#minecraft:swords"]}]})";
+    }
+    {
+        std::ofstream f(std::filesystem::path(tmp) / "top_pack.json");
+        f << R"({"name":"top_pack","dependencies":["mid_pack"],
+                  "enchantments":[{"id":"mod:ember","name":"Ember","platform":"java",
+                                   "max_level":3,"multiplier":2,
+                                   "supported_items":["#minecraft:swords"]}]})";
+    }
+    // CLIApp::run_profile 从 AppConfig::get().profiles_dir 取 profiles 目录
+    // （run() 内部 _ctx.set_profiles_dir(pdir)）——临时注入 + RAII 还原。
+    const std::string saved_dir = AppConfig::get().profiles_dir;
+    AppConfig::get().profiles_dir = tmp;
+    struct RestoreProfilesDir {
+        const std::string v;
+        ~RestoreProfilesDir() { AppConfig::get().profiles_dir = v; }
+    } restore_dir{saved_dir};
+
+    // ── 正向：--effective 显示依赖合并行 + 依赖覆写值 + 自身行 ──
+    {
+        std::ostringstream buf;
+        std::streambuf* old = std::cout.rdbuf(buf.rdbuf());
+        struct Restore { std::streambuf* o; ~Restore() { std::cout.rdbuf(o); } } restore{old};
+        const char* argv[] = {"besq", "profile", "inspect", "top_pack", "ench",
+                              "--effective", "--format", "json"};
+        int rc = CLIApp().run(8, const_cast<char**>(argv));
+        expect(rc == 0, "inspect --effective exit 0");
+        const std::string out = buf.str();
+        expect(out.find("\"id\":\"minecraft:sharpness\"") != std::string::npos,
+               "effective includes dependency-merged row (sharpness from vanilla base)");
+        expect(out.find("\"max_level\":7") != std::string::npos,
+               "dependency override value visible (mid_pack overrides vanilla sharpness to 7)");
+        expect(out.find("\"id\":\"mod:ember\"") != std::string::npos,
+               "effective keeps own row (mod:ember)");
+    }
+    // ── 缺省（无 --effective）：仅自身数据，无依赖行（行为零改动）──
+    {
+        std::ostringstream buf;
+        std::streambuf* old = std::cout.rdbuf(buf.rdbuf());
+        struct Restore { std::streambuf* o; ~Restore() { std::cout.rdbuf(o); } } restore{old};
+        const char* argv[] = {"besq", "profile", "inspect", "top_pack", "ench", "--format", "json"};
+        int rc = CLIApp().run(7, const_cast<char**>(argv));
+        expect(rc == 0, "inspect default exit 0");
+        const std::string out = buf.str();
+        expect(out.find("\"id\":\"mod:ember\"") != std::string::npos, "default keeps own row");
+        expect(out.find("minecraft:sharpness") == std::string::npos,
+               "default view has NO dependency-merged rows");
+    }
+    // ── 未知 profile + --effective：同缺省干净报错（profile_exists 预校验）──
+    {
+        const char* argv[] = {"besq", "profile", "inspect", "nope_nope", "ench", "--effective"};
+        expect_throws([&] { CLIApp().run(6, const_cast<char**>(argv)); },
+                      "unknown profile + --effective throws");
+    }
+    std::filesystem::remove_all(tmp, ec);
+    TEST_PASS("inspect --effective");
 }
 
 TEST_CASE("cli_slice2a_algo_inspect") {
