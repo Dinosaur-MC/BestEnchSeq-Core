@@ -445,8 +445,8 @@ int CLIApp::run_profile(const Config& config) {
                 throw std::runtime_error(tr_fmt("cli.err.profile_not_found", config.profile_target));
             // --effective：数据源 = 依赖合并有效视图（solve 消费同一视图，
             // BesqContext::effective_profile）；缺省 = 自身数据（行为零改动）。
-            // 未知 profile 已由上方 profile_exists 预校验报同一本地化错误，
-            // effective_profile 的抛异常路径（未知/依赖环）不会到达 CLI 层。
+            // 未知 profile 已由上方 profile_exists 预校验报同一本地化错误；
+            // 依赖环异常由 main 顶层 catch 转干净错误退出（非本地化）。
             const Profile& p = config.inspect_effective
                 ? _ctx.effective_profile(config.profile_target)
                 : _ctx.profile(config.profile_target);
