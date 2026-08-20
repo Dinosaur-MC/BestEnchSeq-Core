@@ -228,6 +228,11 @@ public:
     /// 新建（自包含），数据源 = 本 context 的私有 ProfileManager +
     /// profiles_dir（set_profiles_dir 覆盖 > AppConfig::get().profiles_dir >
     /// 默认 <exe_dir>/profiles，与 load_profiles() 同解析）。
+    /// 注意（片 1 T5 minor）：profiles_dir 的"等价性"（SAVE 落盘目录 == 后续
+    /// load 目录）只对 CLI 驱动用法成立（set_profiles_dir → load_profiles →
+    /// run_sql 同目录解析）。直接调用方若在 load 后改动目录状态（或未
+    /// set_profiles_dir 而依赖默认），SAVE 可能写入与 load 不一致的目录——
+    /// 调用方须自行保证传入一致目录。
     SqlRunResult run_sql(const std::string& statements, const std::string& profile, std::string& error);
 
     /// 常驻 SQL 会话工厂（片 3 REPL 消费）。profiles_dir 解析与 run_sql 同规则

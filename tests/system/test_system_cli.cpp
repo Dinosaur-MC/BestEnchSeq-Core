@@ -1047,6 +1047,33 @@ TEST_CASE("system: profile sql repl json format") {
     TEST_PASS("system: profile sql repl json format");
 }
 
+TEST_CASE("system: profile sql repl json write suppresses empty array") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // F4（片 3 N2）：REPL json 模式写语句（无结果）→ stdout 零输出（抑制 `[[]]`）；
+    // 语句消息/提示符/退出脏警告全走 stderr。chain 路径不受影响（GC6 逐字节 `[[]]`）。
+    const std::string tmp =
+        (std::filesystem::temp_directory_path() / ("besq_sql_repl_jsonw_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string x = "test:repljsonw";
+    const std::string stdin_input =
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('" + x + "','ReplJsonW',1,1,'#minecraft:swords');\n"
+        "QUIT\n";
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i", "--format", "json"}, stdin_input,
+                      {{"BESQ_PROFILES_DIR", tmp}});
+    expect_eq(r.exit_code, 0, "repl json write: exit 0");
+    expect(r.out.find("[[]]") == std::string::npos, "repl json write: no empty array marker on stdout");
+    expect(r.out.empty(), "repl json write: stdout empty for write-only session");
+    expect_contains(r.err, "row(s) affected", "repl json write: affected message on stderr");
+    expect_contains(r.err, "unsaved changes", "repl json write: dirty warning on stderr");
+    TEST_PASS("system: profile sql repl json write suppresses empty array");
+}
+
 TEST_CASE("system: profile sql repl interactive exclusive") {
     const std::string bin = find_besq();
     if (bin.empty()) {

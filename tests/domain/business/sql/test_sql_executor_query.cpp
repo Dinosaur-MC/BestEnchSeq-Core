@@ -254,7 +254,8 @@ TEST_CASE("sql_unknown_profile_error") {
 
 TEST_CASE("sql_write_statements_deferred") {
     // 片 1 写面在 Task 3 落地：INSERT/UPDATE/DELETE 已真实执行（语义矩阵见
-    // test_sql_executor_write）；STATUS/SAVE 仍由 Task 4 的 SqlSession 提供。
+    // test_sql_executor_write）；STATUS/SAVE 由 SqlSession 层提供（executor 的
+    // execute() 只对裸直调返回占位消息——积压清扫 C3 更新了措辞）。
     ProfileManager mgr = make_vanilla();
     SqlExecutor ex(mgr, "profiles");
     ex.set_current("builtin:vanilla");
@@ -270,11 +271,11 @@ TEST_CASE("sql_write_statements_deferred") {
     expect(ex.execute(stmts[2]).affected == 0, "DELETE no-match executes with 0 affected");
     auto st = ex.execute(stmts[3]);
     expect(st.headers.empty() && st.rows.empty(), "STATUS empty result");
-    expect(st.message.find("Task 4") != std::string::npos, "STATUS lands in Task 4");
+    expect(st.message.find("SqlSession") != std::string::npos, "STATUS handled by SqlSession");
     auto sv = ex.execute(stmts[4]);
     expect(sv.headers.empty() && sv.rows.empty(), "SAVE empty result");
-    expect(sv.message.find("Task 4") != std::string::npos, "SAVE lands in Task 4");
-    TEST_PASS("write statements land in Task 3/4");
+    expect(sv.message.find("SqlSession") != std::string::npos, "SAVE handled by SqlSession");
+    TEST_PASS("write statements land in executor/session");
 }
 
 // ─── 积压清扫 T1.4（spec §3.1 测试补强批）：query 面 AND 多条件 / 未知列 /

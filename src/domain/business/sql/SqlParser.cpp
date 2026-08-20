@@ -441,11 +441,15 @@ std::vector<SqlStmt> SqlParser::parse_impl() {
         if (peek().kind == SqlToken::Kind::semi)
             take();
     }
-    // lexer 错误（未闭合字符串/非法字符 → next() 置 error 并返回 end token）必须
-    // 上浮为解析错误：否则 parse 会"成功"地丢弃畸形尾部，run_sql 零执行保证被攻破。
-    // 已解析出的语句一并清空（整体输入畸形 → 返回零语句，与零执行语义一致）。
-    if (!_lx.error.empty() && error.empty()) {
-        fail("lexer error: " + _lx.error);
+    // lexer 错误（stoll 溢出/未闭合字符串/非法字符 → next() 置 error 并返回 end
+    // token）必须上浮为解析错误：否则 parse 会"成功"地丢弃畸形尾部，run_sql
+    // 零执行保证被攻破。解析器可能已因 end token 派生次要错误（如 "expected
+    // condition value"）——根因是 lexer 错误，直接覆盖（否则真实原因被遮蔽，
+    // 如超长数字字面量的 "out of range" 契约）。已解析出的语句一并清空（整体
+    // 输入畸形 → 返回零语句，与零执行语义一致）。
+    if (!_lx.error.empty()) {
+        error = "lexer error: " + _lx.error;
+        error_pos = _tokens;
         out.clear();
     }
     return out;

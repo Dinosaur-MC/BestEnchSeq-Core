@@ -455,9 +455,10 @@ BesqContext::SqlRunResult BesqContext::run_sql(const std::string& statements,
     if (!profile.empty()) {
         try {
             session.use(profile);
-        } catch (const std::exception& e) {
+        } catch (const std::runtime_error& e) {
             // use() 对未知 profile 抛 std::runtime_error（无错误通道）——
             // CLI 层先 profile_exists 预校验报本地化错误；这里兜底转 error。
+            // 只捕获 runtime_error：其余异常（bad_alloc 等）正常传播，不吞。
             error = e.what();
             return out;
         }

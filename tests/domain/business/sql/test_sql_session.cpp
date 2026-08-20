@@ -622,3 +622,55 @@ TEST_CASE("sql_session_merge_missing_dest_not_dirty") {
     tp.cleanup();
     TEST_PASS("merge missing dest not dirty");
 }
+
+// ─── 积压清扫 F5（片 1 T4 minor）：SAVE 后基线修剪 ───────────────────────
+// 基线 = 脏 profile 专用：SAVE 成功 → 非脏 profile 不再保留基线（下次写语句经
+// execute() 首写分支重新取会话起点快照）。可观察契约：已保存 profile 的 STATUS
+// 无差（base=cur），再次写 → 重新标脏且 STATUS 只显示新写差异（基线 = 新起点）。
+
+TEST_CASE("sql_session_save_trims_baseline") {
+    auto tp = make_temp_profiles({"p1"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+
+    // 写 → 脏；SAVE → 清脏 + 基线修剪
+    run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+           "VALUES ('test:ba','BA',1,1,'#minecraft:swords');");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p1"}, "dirty before save");
+    expect_eq(s.save(false).message, "saved: p1", "save ok");
+
+    // 已保存（非脏）profile 的 STATUS：无基线 → base=cur → 无差
+    const std::string st = s.status(StatusStmt{});
+    expect(st.find("(dirty)") == std::string::npos, "clean after save");
+    expect(st.find("(no changes)") != std::string::npos, "saved profile shows no changes");
+
+    // 再写 → 重新取基线（= 当前状态）→ 脏；STATUS 只见新写差异
+    run(s, "UPDATE enchantment SET max_level=3 WHERE id='test:ba';");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p1"}, "re-dirty after another write");
+    const std::string st2 = s.status(StatusStmt{});
+    expect(st2.find("~test:ba(max_level: 1->3)") != std::string::npos, "diff vs the fresh baseline");
+
+    tp.cleanup();
+    TEST_PASS("save trims baseline");
+}
+
+// ─── 积压清扫 D6（片 1 T4 minor）：全部目标外删 → "nothing to save" ─────
+// save() 对已外删的脏 profile 清脏跳过；全部外删 → saved 空 → "nothing to save"。
+
+TEST_CASE("sql_session_save_externally_removed_targets") {
+    auto tp = make_temp_profiles({"p1"});
+    SqlSession s(tp.mgr, tp.dir);
+    s.use("p1");
+    run(s, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+           "VALUES ('test:er','ER',1,1,'#minecraft:swords');");
+    expect(s.dirty_profiles() == std::vector<std::string>{"p1"}, "dirty before external removal");
+
+    // 外部删除脏 profile（SQL 面不可达：manager 直删）
+    tp.mgr.remove("p1");
+    auto sv = s.save(false);
+    expect_eq(sv.message, "nothing to save", "all targets removed → nothing to save");
+    expect(s.dirty_profiles().empty(), "removed profile cleaned from dirty");
+
+    tp.cleanup();
+    TEST_PASS("save with externally removed targets");
+}

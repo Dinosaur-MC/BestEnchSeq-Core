@@ -249,28 +249,23 @@ TEST_CASE("sql_parser_select_star_and_show") {
     TEST_PASS("select star and show parse");
 }
 
-// T1.7：超长数字字面量（40 位）→ 优雅解析错误而非异常逃逸（配合 T2 F1）。
-// 当前 HEAD（F1 未修）：SqlLexer.cpp:83 `std::stoll` 对 40 位数字抛
-// std::out_of_range 且未捕获 → 异常逃出 SqlParser::parse（run_sql 的 parse
-// 在 try 外 → CLI 顶层 catch 显示 "stoll argument out of range" + exit 1；
-// REPL 直接死）。此为已知缺陷行为（RED）——记录并 SKIP，不破坏全量 ctest
-// 回归门；T2 F1（lexer 捕获 stoll → lexer error "integer literal out of
-// range"，走零执行路径）落地后此分支不再触发，下方契约断言生效转绿
-// （跨任务 TDD）。
+// T1.7：超长数字字面量（40 位）→ 优雅解析错误而非异常逃逸（F1：lexer 捕获
+// std::stoll 溢出 → lexer error "integer literal out of range"，零执行路径）。
+// 修复前（HEAD 3bdece9a）：std::stoll 抛 out_of_range 且未捕获 → 异常逃出
+// SqlParser::parse（run_sql 的 parse 在 try 外 → CLI 顶层 catch 显示裸
+// "stoll argument out of range" + exit 1；REPL 直接死）。本用例当初按跨任务
+// TDD 标 RED + SKIP 门控，F1 落地后契约生效转绿。
 TEST_CASE("sql_lexer_long_integer_graceful_error") {
     const std::string forty_digits(40, '9');
     SqlParser p;
     std::vector<SqlStmt> stmts;
     try {
         stmts = p.parse("SELECT id FROM enchantment WHERE id=" + forty_digits + ";");
-    } catch (const std::out_of_range& e) {
-        SKIP(std::string("awaiting T2 F1 (SqlLexer stoll catch): 40-digit literal throws out_of_range and escapes parse: ") +
-             e.what());
     } catch (const std::exception& e) {
-        expect(false, std::string("40-digit literal: unexpected exception type escaped parse: ") + e.what());
+        expect(false, std::string("40-digit literal must not escape parse: ") + e.what());
         return;
     }
-    // 契约（T2 F1 后）：lexer 捕获 → 解析错误（含 "out of range"）+ 零语句，不崩溃。
+    // 契约（F1 后）：lexer 捕获 → 解析错误（含 "out of range"）+ 零语句，不崩溃。
     expect(!p.error.empty(), "40-digit integer literal -> graceful parse error");
     expect(p.error.find("out of range") != std::string::npos, "error mentions out of range");
     expect(stmts.empty(), "zero statements on lexer error (zero-execution guarantee)");

@@ -403,7 +403,7 @@ TEST_CASE("test_pm_load_directory_replace_keeps_active") {
     auto dir = std::filesystem::temp_directory_path() / ("besq_pm_replace_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
     auto path = dir / "bare_mod.json";
-    auto write_mod = [&](const char* name) {
+    auto write_mod = [&]() {
         std::ofstream f(path);
         f << R"({
             "name": "bare_mod",
@@ -413,11 +413,10 @@ TEST_CASE("test_pm_load_directory_replace_keeps_active") {
             "categories": [],
             "tags": {}
         })";
-        (void)name;
     };
 
     ProfileManager pm;
-    write_mod("first");
+    write_mod();
     pm.load_directory(dir);
     expect(pm.exists("bare_mod"), "bare_mod loaded");
     pm.activate("builtin:vanilla");  // CLI 流：load_builtin() 先激活根 profile
@@ -442,7 +441,7 @@ TEST_CASE("test_pm_load_directory_replace_keeps_active") {
 
     // 非活动 profile 被替换 → 活动选中不受影响
     pm.activate("bare_mod");
-    write_mod("second");
+    write_mod();
     pm.load_directory(dir);
     expect(pm.active_name() == "bare_mod", "active selection preserved after replacing non-active profile");
 

@@ -581,8 +581,56 @@ TEST_CASE("sql_write_unknown_column_and_deferred") {
     expect(r4.affected == 0 && r4.message.find("bogus") != std::string::npos, "unknown where column");
 
     auto st = run(ex, "STATUS;");
-    expect(st.message.find("Task 4") != std::string::npos, "STATUS deferred to Task 4");
+    expect(st.message.find("SqlSession") != std::string::npos, "STATUS handled by SqlSession");
     auto sv = run(ex, "SAVE;");
-    expect(sv.message.find("Task 4") != std::string::npos, "SAVE deferred to Task 4");
+    expect(sv.message.find("SqlSession") != std::string::npos, "SAVE handled by SqlSession");
     TEST_PASS("unknown columns and deferred statements");
+}
+
+// ─── 积压清扫 F6（片 1 T4 minor）：NSID 非法 tag key 已在 executor 侧守卫 ──
+// NSID 构造严格（CommonTypes.cpp：namespace [a-z0-9_.-]、path [a-z0-9/._-]，
+// 无大写、无空格；非法抛 runtime_error）→ to_nsid 捕获转 false → set_field_* 报
+// "invalid NSID '<val>' for column '<col>'"。核对结论：已守卫，无需修 executor，
+// 本用例固化各入口的错误消息 + 零写入。
+
+TEST_CASE("sql_write_invalid_nsid_rejected") {
+    ProfileManager mgr = make_vanilla();
+    const auto& p = *mgr.find("builtin:vanilla");
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("builtin:vanilla");
+    const size_t tags_before = p.tags().size();
+    const size_t ench_before = p.ench().size();
+
+    // tags.id 非法（含空格）
+    auto r1 = run(ex, "INSERT INTO tags (id, name, values) VALUES ('bad id','X','minecraft:sharpness');");
+    expect(r1.affected == 0, "invalid tag id: no rows affected");
+    expect(r1.message.find("invalid NSID") != std::string::npos, "invalid tag id: error names NSID");
+    expect(r1.message.find("bad id") != std::string::npos, "invalid tag id: error shows the value");
+    expect(p.tags().size() == tags_before, "invalid tag id: no write");
+
+    // tags.id 非法（大写）
+    auto r2 = run(ex, "INSERT INTO tags (id, name, values) VALUES ('#Bad:Id','X','minecraft:sharpness');");
+    expect(r2.affected == 0, "uppercase tag id rejected");
+    expect(r2.message.find("invalid NSID") != std::string::npos, "uppercase tag id: error names NSID");
+    expect(p.tags().size() == tags_before, "uppercase tag id: no write");
+
+    // enchantment.id 非法（三个冒号段）
+    auto r3 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                      "('a:b:c','X',1,1,'#minecraft:swords');");
+    expect(r3.affected == 0, "malformed nsid rejected");
+    expect(r3.message.find("invalid NSID") != std::string::npos, "malformed nsid: error names NSID");
+    expect(p.ench().size() == ench_before, "malformed nsid: no write");
+
+    // 列表列中的非法项（exclusive_set）
+    auto r4 = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, exclusive_set, supported_items) VALUES "
+                      "('test:ok','OK',1,1,'minecraft:bad id','#minecraft:swords');");
+    expect(r4.affected == 0, "invalid list item rejected");
+    expect(r4.message.find("invalid NSID") != std::string::npos, "invalid list item: error names NSID");
+    expect(p.ench().size() == ench_before, "invalid list item: no write");
+
+    // 对照：合法 tag id 仍可写入（守卫未误伤合法输入）
+    auto r5 = run(ex, "INSERT INTO tags (id, name, values) VALUES ('#test:valid','V','minecraft:sharpness');");
+    expect(r5.affected == 1, "valid tag id still writable");
+
+    TEST_PASS("invalid NSID rejected");
 }

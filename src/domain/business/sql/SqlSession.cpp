@@ -164,9 +164,10 @@ bool SqlSession::undo(std::string& err) {
         // 弹栈目标 = 最近一次成功写的 profile。
         const std::string prof = _write_history.back();
         _write_history.pop_back();
-        // 配对清理（约束 9/10）：UNDO 后配对 profile 已不存在（FORK 的 created
-        // 条目已 remove 新 profile）→ 清 _dirty/_baselines 中该名；否则按现状
-        // 标脏（spec：UNDO 后标脏，即使无实际差）。
+        // 配对清理（约束 9/10）：UNDO 后配对 profile 已不存在 → 清 _dirty/_baselines
+        // 中该名（两情形：FORK 的 created 条目已 remove 新 profile；或 ghost-dirty
+        // ——写过但被外部删除的 profile，undo 不得复标一个已不存在的名）；
+        // 否则按现状标脏（spec：UNDO 后标脏，即使无实际差）。
         if (_mgr.find(prof) == nullptr) {
             _dirty.erase(prof);
             _baselines.erase(prof);
@@ -196,8 +197,12 @@ SqlResult SqlSession::save(bool all) {
     std::vector<std::string> warnings;
     for (const std::string& name : targets) {
         const Profile* p = _mgr.find(name);
-        if (!p) { // 脏 profile 已被外部移除 → 无法保存，直接清脏跳过
+        if (!p) {
+            // 脏 profile 已被外部移除（SQL 面不可达：manager 直删）→ 无法保存，
+            // 清脏 + 清基线后跳过（D6：全部目标外删 → saved 空 → "nothing to save"；
+            // 基线对已不存在的 profile 无意义，一并清理）。
             _dirty.erase(name);
+            _baselines.erase(name);
             continue;
         }
         // C2（终审）：文件名消毒碰撞守卫——两个不同 key 消毒后映射到同一文件
@@ -224,7 +229,11 @@ SqlResult SqlSession::save(bool all) {
             warnings.push_back("warning: '" + name +
                                "' is datapack-sourced; native save may collide with its datapack dir on reload");
         _dirty.erase(name);
-        _baselines[name] = clone_with_resolver(*p); // 重置基线
+        // F5（片 1 T4 minor）：基线 = 脏 profile 专用——SAVE 后非脏 profile 不再
+        // 保留基线（下次写语句会经 execute() 首写分支重新取会话起点快照）。
+        // 删除而非重置：STATUS 对非脏 profile 走 base=cur（无基线 → 无差），与
+        // 旧"重置基线为当前状态"观察等价，且不残留陈旧克隆。
+        _baselines.erase(name);
         saved.push_back(name);
     }
     r.message = saved.empty() ? std::string("nothing to save") : "saved: " + join(saved, ", ");
@@ -351,6 +360,11 @@ std::string SqlSession::diff_table(const std::string& table, const Profile& base
         } else {
             const Row& bf = b.at(id);
             const Row& cf = c.at(id);
+            // 显式尺寸守卫（片 1 T4 minor）：当前 table_rows 恒产出完整列集
+            // （行非空），min 实际无空向量风险；但两侧行若缺列（未来列集演进），
+            // 空 Row 直接跳过 diff——比在 std::min 上隐式靠 n==0 短路更明确。
+            if (bf.empty() || cf.empty())
+                continue;
             std::vector<std::string> changes;
             const size_t n = std::min(bf.size(), cf.size());
             for (size_t i = 0; i < n; ++i)

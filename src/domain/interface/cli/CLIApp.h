@@ -128,7 +128,11 @@ private:
     void print_sql_messages(std::span<const business::sql::SqlResult> steps,
                             const std::string& format, bool errors_to_stderr);
     /// 最后一条语句结果渲染（json 数组 / text 对齐表格 + 数值列启发）。
-    void print_sql_result(const business::sql::SqlResult& r, const std::string& format);
+    /// \p suppress_empty_json（仅 REPL 传 true）：json 分支且结果无表头（写语句/
+    /// 无结果）时跳过输出——REPL 抑制 `[[]]`（片 3 N2）；chain 路径保持 false，
+    /// 逐字节输出 `[[]]`（GC6 约束，调用点区分而非改默认行为）。
+    void print_sql_result(const business::sql::SqlResult& r, const std::string& format,
+                          bool suppress_empty_json = false);
 
     BesqContext _ctx;
 

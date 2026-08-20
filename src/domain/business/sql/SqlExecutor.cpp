@@ -149,6 +149,9 @@ std::vector<std::string> tags_row(const Profile& p, const EquipmentTag& t) {
 }
 
 int64_t to_int(const std::string& s) {
+    // ORDER BY 数值比较辅助：字符串化列值 → int64。解析失败静默回 0（片 1 T2
+    // minor，文档化）——行值来自受控 std::to_string（恒可解析），非数值列不会
+    // 被路由到这里；0 只是防御性占位，与宽松比较语义一致，不报错。
     try {
         return std::stoll(s);
     } catch (...) {
@@ -730,10 +733,11 @@ SqlResult SqlExecutor::execute(const SqlStmt& stmt) {
         return exec_merge(*mg);
     if (const auto* fk = std::get_if<ForkStmt>(&stmt))
         return exec_fork(*fk);
-    // STATUS/SAVE 由 Task 4 的 SqlSession（脏跟踪 + 基线 diff + 持久化）提供；
-    // UseStmt 的 session 分发同样在 Task 4。
+    // STATUS/SAVE/USE 不在 executor 层实现：脏跟踪/基线 diff/持久化与 USE 的
+    // 会话切换均由 SqlSession::execute() 就地分发（片 1 Task 4 已落地）。此
+    // 分支只服务裸 executor 直调（测试/非会话路径），返回占位消息。
     SqlResult r;
-    r.message = "STATUS/SAVE land in Task 4";
+    r.message = "STATUS/SAVE are handled by SqlSession";
     return r;
 }
 
@@ -993,6 +997,9 @@ SqlResult SqlExecutor::exec_update(const UpdateStmt& s) {
         }
         ProfileWriteGuard guard(_mgr, prof);
         for (const Equipment& patch : patches) {
+            // remove+add（镜像 ProfileManager::update_equipment 实现）：注册表
+            // 行序移动——被改行落到迭代末尾（C6，片 1 T3 minor：行为不改，
+            // 仅注释）。SELECT * 无 ORDER BY 时行序因此变化，属已知语义。
             prof->remove_equipment(patch.id);
             prof->add_equipment(patch);
         }
@@ -1626,6 +1633,9 @@ SqlResult SqlExecutor::exec_select(const SelectStmt& s) {
     }
 
     // ORDER BY（单列，asc/desc；数值列按 int 比较，其余按字符串）。
+    // 注意（片 1 T2 minor，C4）：bool 列（is_treasure）kind 非 Int → 走字符串
+    // 分支——字符串化 "false"/"true" 的字典序与布尔序（false < true）巧合一致
+    // （两值域），无需特判；若将来引入多值枚举列按此分支排序需重新审视。
     if (!s.order_by.empty()) {
         const size_t oi = static_cast<size_t>(col_index(s.order_by));
         const bool numeric = (*cols)[oi].kind == ColKind::Int;

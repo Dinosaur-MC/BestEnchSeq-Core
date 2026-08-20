@@ -1561,6 +1561,35 @@ TEST_CASE("cli_slice_sql_repl_session") {
     TEST_PASS("sql repl session");
 }
 
+// ─── 积压清扫 F4（片 3 N2）：REPL json 写语句抑制 `[[]]` ─────────────────
+// --format json 下 stdout 须保持纯 JSON；写语句（无结果）的 `[[]]` 是交互噪音，
+// REPL 路径抑制（print_sql_result suppress_empty_json=true）→ stdout 零输出
+// （提示符/消息/脏警告全走 stderr）。chain 路径不受影响（GC6 逐字节 `[[]]`，
+// 见 cli_slice_sql_cross_json_messages 的 [[]] 断言）。
+
+TEST_CASE("cli_slice_sql_repl_json_write_suppresses_empty") {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    std::ostringstream out, err;
+    std::istringstream in(
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('test:repljson','R',1,1,'#minecraft:swords');\n"
+        "QUIT\n");
+    std::streambuf* oo = std::cout.rdbuf(out.rdbuf());
+    std::streambuf* oe = std::cerr.rdbuf(err.rdbuf());
+    std::streambuf* oi = std::cin.rdbuf(in.rdbuf());
+    struct Restore { std::streambuf* o; std::streambuf* e; std::streambuf* i;
+                     ~Restore() { std::cout.rdbuf(o); std::cerr.rdbuf(e); std::cin.rdbuf(i); } } restore{oo, oe, oi};
+    const char* argv[] = {"besq", "profile", "sql", "-i", "--format", "json"};
+    int rc = CLIApp().run(6, const_cast<char**>(argv));
+    expect(rc == 0, "repl json write: exit 0");
+    expect(out.str().find("[[]]") == std::string::npos, "repl json write: no empty-array marker on stdout");
+    expect(out.str().empty(), "repl json write: stdout fully empty (pure JSON, nothing to print)");
+    expect(err.str().find("row(s) affected") != std::string::npos, "repl json write: affected message on stderr");
+    expect(err.str().find("unsaved") != std::string::npos, "repl json write: dirty warning on stderr");
+    TEST_PASS("sql repl json write suppresses empty array");
+}
+
 TEST_CASE("cli_slice_sql_unknown_profile") {
     register_builtin_translations(LanguageManager::instance());
     LanguageManager::instance().select("en_US");
@@ -1797,6 +1826,9 @@ TEST_CASE("cli_slice_sql_cross_json_messages") {
     const std::string so = out.str();
     const std::string se = err.str();
     expect(!so.empty() && so[0] == '[', "stdout is a pure JSON array");
+    // GC6（积压清扫 F4）：chain json 对写语句（末条 COPY 无结果）必须逐字节
+    // 保持 `[[]]`——只有 REPL 路径抑制（见 cli_slice_sql_repl_json_write_suppresses_empty）。
+    expect(so.find("[[]]") != std::string::npos, "chain json keeps [[]] for write results (GC6)");
     expect(so.find("forked") == std::string::npos, "message text not on stdout (json)");
     expect(se.find("forked: " + fork_name) != std::string::npos, "forked message on stderr (json)");
     expect(se.find("row(s) affected") != std::string::npos, "copy affected message on stderr (json)");

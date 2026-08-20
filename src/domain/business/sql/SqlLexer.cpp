@@ -1,6 +1,7 @@
 #include "domain/business/sql/SqlLexer.h"
 
 #include <cctype>
+#include <stdexcept>
 
 namespace business::sql {
 
@@ -79,8 +80,17 @@ SqlToken SqlLexer::next() {
         size_t start = _pos;
         while (_pos < _src.size() && _src[_pos] >= '0' && _src[_pos] <= '9')
             ++_pos;
-        return {SqlToken::Kind::int_, std::string(_src.substr(start, _pos - start)),
-                std::stoll(std::string(_src.substr(start, _pos - start)))};
+        const std::string digits(_src.substr(start, _pos - start));
+        try {
+            return {SqlToken::Kind::int_, digits, std::stoll(digits)};
+        } catch (const std::out_of_range&) {
+            // 超长数字字面量（int64 溢出）：std::stoll 抛 out_of_range——捕获并
+            // 转 lexer 错误（零执行路径，与未闭合字符串同一模式）。不得让异常
+            // 逃出 parse：run_sql 的 parse 在 try 外，逃逸会以裸 stoll 消息打穿
+            // CLI 输出（exit 1 "stoll argument out of range"）并杀死 REPL。
+            error = "integer literal out of range";
+            return {};
+        }
     }
     if (is_ident_start(c)) {
         size_t start = _pos;

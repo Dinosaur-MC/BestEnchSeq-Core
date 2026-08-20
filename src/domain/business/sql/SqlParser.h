@@ -74,12 +74,14 @@ class SqlParser {
 public:
     std::vector<SqlStmt> parse(std::string_view statements);
     std::string error;    // 非空 = 解析失败
-    size_t error_pos = 0; // 失败 token 位置（0-based token 序号）
+    // 失败 token 位置（0-based token 序号）。松散（片 1 T1 minor，文档化）：
+    // lexer 错误上浮时取当前 _tokens（已消耗 token 数，非精确失败点），多语句
+    // 链中后段失败也可能偏离实际 token——仅作诊断提示，不做精确契约。
+    size_t error_pos = 0;
 
 private:
     std::vector<SqlStmt> parse_impl();
     std::vector<WhereCond> parse_where();
-    void expect_ident(std::string_view expect, std::string_view stmt_name);
     void fail(std::string msg);
     SqlToken peek();
     SqlToken take();

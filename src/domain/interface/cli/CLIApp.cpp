@@ -607,7 +607,8 @@ int CLIApp::run_profile(const Config& config) {
                 throw std::runtime_error(error);
             }
 
-            // 逐条消息 + 最后一条结果渲染（抽取的共享辅助；行为逐字节不变）
+            // 逐条消息 + 最后一条结果渲染（抽取的共享辅助；行为逐字节不变——
+            // chain json 对写语句保持 `[[]]` 输出，GC6 回归门）
             print_sql_messages(result.steps, config.sql_format, /*errors_to_stderr=*/false);
             print_sql_result(result.last, config.sql_format);
             flush_output();
@@ -645,8 +646,13 @@ void CLIApp::print_sql_messages(std::span<const business::sql::SqlResult> steps,
     }
 }
 
-void CLIApp::print_sql_result(const business::sql::SqlResult& r, const std::string& format) {
+void CLIApp::print_sql_result(const business::sql::SqlResult& r, const std::string& format, bool suppress_empty_json) {
     if (format == "json") {
+        // REPL json 抑制（片 3 N2）：写语句/无结果（headers 空）时跳过输出——
+        // 交互下 `[[]]` 是噪音，抑制后 stdout 保持纯 JSON 且写语句零输出。
+        // chain 路径（suppress=false）保持逐字节 `[[]]`（GC6 回归门）。
+        if (suppress_empty_json && r.headers.empty())
+            return;
         // json → 数组（[表头, 行...]）
         Json arr = Json::array();
         Json headers = Json::array();
@@ -756,7 +762,8 @@ int CLIApp::run_sql_repl(const Config& config) {
                 break;   // 语句失败 → 停止该批（错误不退出 REPL）
         }
         print_sql_messages(batch, config.sql_format, /*errors_to_stderr=*/true);
-        print_sql_result(last, config.sql_format);
+        // REPL 抑制空结果 json（`[[]]`）——chain 路径不传（GC6 逐字节约束）。
+        print_sql_result(last, config.sql_format, /*suppress_empty_json=*/true);
     };
     // 提交累积缓冲 B（两调用点已前置过滤 UNDO，这里只跑批；EOF 路径不走本函数）
     auto submit_buffer = [&]() {
