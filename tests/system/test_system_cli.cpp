@@ -654,3 +654,172 @@ TEST_CASE("system: profile sql save roundtrip") {
     expect_contains(r2.out, env_ns + ":sqlmark", "saved row visible after reload");
     TEST_PASS("system: profile sql save roundtrip");
 }
+
+// ── slice-2 跨 profile 系统 e2e（真实 CLI：USE/COPY/FORK/MERGE + SAVE roundtrip）──
+//
+// 跨进程持久化门：COPY/FORK 产物经 SAVE 落盘 → 新进程（重新加载 profiles 目录）
+// 可见；MERGE 目标标脏 → STATUS 输出带 (dirty)。临时 profiles 目录隔离
+// （BESQ_PROFILES_DIR → temp 目录）+ unique_ts_suffix 唯一 profile 名（防跨测试
+// 干扰）。种子 profile 用最小 native JSON（加载时保留 vanilla tag 宇宙 → 其
+// supported_items '#minecraft:swords' 引用在 INSERT/COPY 的 FK 校验下可解析，
+// 与 acceptance 的 use_a.json 先例同源）。
+
+TEST_CASE("system: profile sql cross USE chain") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_use_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p2 = "besq_use_p2_" + unique_ts_suffix();
+    {
+        std::ofstream f(std::filesystem::path(tmp) / (p2 + ".json"));
+        f << "{\"name\":\"" << p2 << "\",\"enchantments\":[],\"equipments\":[],\"tags\":{}}";
+    }
+    // 链：USE p2（会话切换）→ INSERT（写入 p2）→ SELECT（从 p2 回读见行）
+    const std::string stmt = "USE " + p2 + "; "
+        "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) "
+        "VALUES ('test:chainmark','ChainMark',1,1,'#minecraft:swords'); "
+        "SELECT id FROM enchantment WHERE id='test:chainmark';";
+    auto r = run_besq(bin, {"profile", "sql", stmt}, {},
+                      {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r.exit_code, 0, "use chain: exit 0");
+    expect_contains(r.out, "use: " + p2, "use chain: USE message");
+    expect_contains(r.out, "test:chainmark", "use chain: SELECT sees the inserted row");
+    // 脏跟踪切到 p2（未 SAVE → 退出警告点名 p2，而非默认 vanilla）
+    expect_contains(r.err, "unsaved changes in: " + p2, "use chain: dirty tracks p2");
+    TEST_PASS("system: profile sql cross USE chain");
+}
+
+TEST_CASE("system: profile sql cross COPY roundtrip") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_copy_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p1 = "besq_copy_p1_" + unique_ts_suffix();
+    const std::string p2 = "besq_copy_p2_" + unique_ts_suffix();
+    {
+        // p1 空目标；p2 源含一行 test:copymark（strict FK 对 p1 校验时
+        // '#minecraft:swords' 经 p1 保留的 vanilla tag 宇宙解析）
+        std::ofstream f1(std::filesystem::path(tmp) / (p1 + ".json"));
+        f1 << "{\"name\":\"" << p1 << "\",\"enchantments\":[],\"equipments\":[],\"tags\":{}}";
+        std::ofstream f2(std::filesystem::path(tmp) / (p2 + ".json"));
+        f2 << "{\"name\":\"" << p2 << "\",\"enchantments\":[{\"id\":\"test:copymark\",\"name\":\"CopyMark\","
+              "\"platform\":\"java\",\"max_level\":1,\"multiplier\":1,"
+              "\"supported_items\":[\"#minecraft:swords\"]}],\"equipments\":[],\"tags\":{}}";
+    }
+    // 进程 1：USE p1 → COPY * FROM p2 INTO enchantment → SAVE（p1.json 落盘）
+    const std::string stmt = "USE " + p1 + "; COPY * FROM " + p2 + " INTO enchantment; SAVE";
+    auto r1 = run_besq(bin, {"profile", "sql", stmt}, {},
+                       {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r1.exit_code, 0, "copy+save: exit 0");
+    expect_contains(r1.out, "row(s) affected", "copy: affected message");
+    expect_contains(r1.out, "saved: " + p1, "copy: save message");
+    // 进程 2（新进程）：--profile p1 SELECT 见复制行 —— 跨进程 roundtrip 门
+    auto r2 = run_besq(bin,
+                       {"profile", "sql", "SELECT id FROM enchantment WHERE id='test:copymark'", "--profile", p1},
+                       {}, {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r2.exit_code, 0, "copy roundtrip select: exit 0");
+    expect_contains(r2.out, "test:copymark", "copy roundtrip: copied row visible in new process");
+    TEST_PASS("system: profile sql cross COPY roundtrip");
+}
+
+TEST_CASE("system: profile sql cross FORK persistence") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_fork_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p1 = "besq_fork_p1_" + unique_ts_suffix();
+    const std::string p3 = "besq_fork_p3_" + unique_ts_suffix();
+    {
+        // p1 源含一行 test:src；FORK 派生 p3 = 全量克隆（含 vanilla tag 宇宙）
+        std::ofstream f1(std::filesystem::path(tmp) / (p1 + ".json"));
+        f1 << "{\"name\":\"" << p1 << "\",\"enchantments\":[{\"id\":\"test:src\",\"name\":\"Src\","
+              "\"platform\":\"java\",\"max_level\":1,\"multiplier\":1,"
+              "\"supported_items\":[\"#minecraft:swords\"]}],\"equipments\":[],\"tags\":{}}";
+    }
+    // 进程 1：FORK p1 AS p3; SAVE ALL（p3.json 落盘）
+    auto r1 = run_besq(bin, {"profile", "sql", "FORK " + p1 + " AS " + p3 + "; SAVE ALL"}, {},
+                       {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r1.exit_code, 0, "fork+save all: exit 0");
+    expect_contains(r1.out, "forked: " + p3, "fork: message");
+    expect_contains(r1.out, "saved: " + p3, "fork: save all message");
+    // 进程 2（新进程）：profile list 见 p3 —— 派生持久化门
+    auto r2 = run_besq(bin, {"profile", "list"}, {},
+                       {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r2.exit_code, 0, "fork list: exit 0");
+    expect_contains(r2.out, p3, "fork list: shows p3");
+    // 进程 3（新进程）：profile info p3 可见
+    auto r3 = run_besq(bin, {"profile", "info", p3}, {},
+                       {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r3.exit_code, 0, "fork info: exit 0");
+    expect_contains(r3.out, p3, "fork info: shows p3");
+    TEST_PASS("system: profile sql cross FORK persistence");
+}
+
+TEST_CASE("system: profile sql cross MERGE status dirty") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_merge_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p1 = "besq_merge_p1_" + unique_ts_suffix();
+    const std::string p2 = "besq_merge_p2_" + unique_ts_suffix();
+    {
+        std::ofstream f1(std::filesystem::path(tmp) / (p1 + ".json"));
+        f1 << "{\"name\":\"" << p1 << "\",\"enchantments\":[],\"equipments\":[],\"tags\":{}}";
+        std::ofstream f2(std::filesystem::path(tmp) / (p2 + ".json"));
+        f2 << "{\"name\":\"" << p2 << "\",\"enchantments\":[{\"id\":\"test:mergesrc\",\"name\":\"MergeSrc\","
+              "\"platform\":\"java\",\"max_level\":1,\"multiplier\":1,"
+              "\"supported_items\":[\"#minecraft:swords\"]}],\"equipments\":[],\"tags\":{}}";
+    }
+    // 链：MERGE INTO p1 FROM p2 → STATUS p1 输出含目标脏标记 + 合并行 diff
+    const std::string stmt = "MERGE INTO " + p1 + " FROM " + p2 + "; STATUS " + p1;
+    auto r = run_besq(bin, {"profile", "sql", stmt}, {},
+                      {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r.exit_code, 0, "merge+status: exit 0");
+    expect_contains(r.out, "merged:", "merge: message prefix");
+    expect_contains(r.out, "profile: " + p1 + " (dirty)", "merge: STATUS marks dest dirty");
+    expect_contains(r.out, "+test:mergesrc", "merge: STATUS shows merged row");
+    TEST_PASS("system: profile sql cross MERGE status dirty");
+}
+
+TEST_CASE("system: profile sql cross json messages") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    const std::string tmp = (std::filesystem::temp_directory_path() / ("besq_sql_json_" + unique_ts_suffix())).string();
+    struct Guard { std::string p; ~Guard() { std::error_code ec; std::filesystem::remove_all(p, ec); } } guard{tmp};
+    std::filesystem::create_directories(tmp);
+    const std::string p3 = "besq_json_fork_" + unique_ts_suffix();
+    // --format json：FORK + COPY(WITH OVERRIDE) + SELECT；语句消息（forked: /
+    // row(s) affected）走 stderr，stdout 保持纯 JSON（[表头, 行...]）
+    const std::string stmt = "FORK builtin:vanilla AS " + p3 + "; "
+        "COPY * FROM builtin:vanilla INTO enchantment WHERE id='minecraft:sharpness' WITH OVERRIDE; "
+        "SELECT id FROM enchantment WHERE id='minecraft:sharpness';";
+    auto r = run_besq(bin, {"profile", "sql", stmt, "--format", "json"}, {},
+                      {{"BESQ_PROFILES_DIR", tmp}, {"BESQ_LANG", "en_US"}});
+    expect_eq(r.exit_code, 0, "cross json: exit 0");
+    expect(!r.out.empty() && r.out.front() == '[', "cross json: stdout is a JSON array");
+    expect_contains(r.out, "minecraft:sharpness", "cross json: SELECT row in JSON");
+    expect(r.out.find("forked") == std::string::npos, "cross json: no message text on stdout");
+    expect(r.out.find("row(s) affected") == std::string::npos, "cross json: no affected msg on stdout");
+    expect_contains(r.err, "forked: " + p3, "cross json: forked message on stderr");
+    expect_contains(r.err, "row(s) affected", "cross json: affected message on stderr");
+    TEST_PASS("system: profile sql cross json messages");
+}
