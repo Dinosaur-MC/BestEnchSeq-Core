@@ -721,7 +721,12 @@ SqlResult SqlExecutor::execute(const SqlStmt& stmt) {
         return exec_delete(*del);
     if (const auto* cp = std::get_if<CopyStmt>(&stmt))
         return exec_copy(*cp);
-    // STATUS/SAVE 由 Task 4 的 SqlSession（脏跟踪 + 基线 diff + 持久化）提供。
+    if (const auto* mg = std::get_if<MergeStmt>(&stmt))
+        return exec_merge(*mg);
+    if (const auto* fk = std::get_if<ForkStmt>(&stmt))
+        return exec_fork(*fk);
+    // STATUS/SAVE 由 Task 4 的 SqlSession（脏跟踪 + 基线 diff + 持久化）提供；
+    // UseStmt 的 session 分发同样在 Task 4。
     SqlResult r;
     r.message = "STATUS/SAVE land in Task 4";
     return r;
@@ -1375,8 +1380,116 @@ SqlResult SqlExecutor::exec_copy(const CopyStmt& s) {
     return r;
 }
 
+// ── 写面：MERGE INTO <dest> FROM <src>（整表并集合并 + resolver 同步） ──
+//
+// 语义（片 2 全局约束 7，binding）：
+// - 映射 ProfileManager::merge(source, dest)：源胜出、dest metadata 保留、
+//   self-merge no-op。源/dest 缺失 → 语句错误（不抛异常）。
+// - resolver 同步（RegistryHelper::merge 不合并 resolver——缺口）：merge 后对
+//   dest.tags() 每行，若源 resolver 定义该 tag（raw_values 非空）→ dest resolver
+//   add_tag（源 raw values 覆盖，保留 #ref）；源无 → 保留 dest 原值。
+// - affected = 源三表行数总和；消息 `merged: N row(s) from <src> into <dest>`。
+// - 原子：dest ProfileWriteGuard；push_undo 先于 commit（沿用 I3 裁决）；
+//   try/catch notify_mutated。
+
+SqlResult SqlExecutor::exec_merge(const MergeStmt& s) {
+    SqlResult r;
+    if (!_mgr.exists(s.source)) {
+        r.message = "unknown profile '" + s.source + "'";
+        return r;
+    }
+    Profile* dst = _mgr.find(s.dest);
+    if (!dst) {
+        r.message = "unknown profile '" + s.dest + "'";
+        return r;
+    }
+    if (s.source == s.dest) {
+        // self-merge no-op（ProfileManager::merge 早退）：无快照、无 undo 条目。
+        r.affected = 0;
+        r.message = "merged: 0 row(s) from " + s.source + " into " + s.dest;
+        return r;
+    }
+    const Profile* src = _mgr.find(s.source);
+    const int64_t affected = static_cast<int64_t>(src->ench().size() + src->eq().size() + src->tags().size());
+
+    ProfileWriteGuard guard(_mgr, dst);
+    try {
+        _mgr.merge(s.source, s.dest); // 预检已保证存在；防御性捕获（guard 未提交 → 恢复）
+    } catch (const std::exception& e) {
+        r.message = e.what();
+        return r;
+    }
+    // resolver 同步：遍历 merge 后的 dest.tags()（合并注册表）；源定义的 tag →
+    // 源 raw values（保留 #ref）整体覆盖 dest resolver 值；源未定义 → 保留。
+    if (const TagResolver* src_tr = src->tag_resolver()) {
+        auto dst_res = dst->tag_resolver_ptr();
+        if (!dst_res) {
+            dst_res = std::make_shared<TagResolver>();
+            dst->set_tag_resolver(dst_res);
+        }
+        for (const auto& [tid, tag] : dst->tags().data()) {
+            if (!src_tr->raw_values(tid.get_ns() + ":" + tid.get_id()))
+                continue; // 源未定义该 tag → 保留 dest 原值
+            std::vector<std::string> vals = raw_values_of(*src, tag);
+            dst_res->add_tag(tid.get_ns() + ":" + tid.get_id(),
+                             std::unordered_set<std::string>(vals.begin(), vals.end()));
+        }
+    }
+    // I3（终审）：push_undo 先于 commit——push_undo 抛异常时 guard 未提交，
+    // 仍会恢复语句前快照。快照按值传入（不 move）。
+    push_undo(s.dest, guard.snapshot);
+    guard.commit();
+    try {
+        _mgr.notify_mutated();
+    } catch (...) {
+    }
+
+    r.affected = affected;
+    r.message = "merged: " + std::to_string(affected) + " row(s) from " + s.source + " into " + s.dest;
+    return r;
+}
+
+// ── 写面：FORK <profile> AS <new_name>（派生；UNDO = 删除新 profile） ──
+//
+// 语义（片 2 全局约束 8/9，binding）：
+// - 映射 ProfileManager::create_from(source, dest)（clone 修复后派生自带独立
+//   resolver）。源缺失 / 目标已存在 → 语句错误（不抛异常）。
+// - 成功消息 `forked: <new_name>`，affected=1；FORK 不切换 current。
+// - 无语句前目标 → 无 ProfileWriteGuard：成功即压 created=true 条目，undo =
+//   remove 新 profile（快照无用，nullptr）。
+
+SqlResult SqlExecutor::exec_fork(const ForkStmt& s) {
+    SqlResult r;
+    if (!_mgr.exists(s.source)) {
+        r.message = "unknown profile '" + s.source + "'";
+        return r;
+    }
+    if (_mgr.exists(s.dest)) {
+        r.message = "profile '" + s.dest + "' already exists";
+        return r;
+    }
+    try {
+        _mgr.create_from(s.source, s.dest);
+    } catch (const std::exception& e) {
+        r.message = e.what();
+        return r;
+    }
+    // created 条目：undo() 对 created 条目执行 _mgr.remove（新 profile 的删除
+    // 本身就是回滚；容量 16 FIFO 与普通条目共用同一全局栈）。
+    push_undo_created(s.dest);
+    r.affected = 1;
+    r.message = "forked: " + s.dest;
+    return r;
+}
+
 void SqlExecutor::push_undo(const std::string& profile, Profile snapshot) {
-    _undo.push_back(UndoEntry{profile, std::make_shared<Profile>(std::move(snapshot))});
+    _undo.push_back(UndoEntry{profile, std::make_shared<Profile>(std::move(snapshot)), false});
+    while (_undo.size() > 16)
+        _undo.pop_front();
+}
+
+void SqlExecutor::push_undo_created(const std::string& profile) {
+    _undo.push_back(UndoEntry{profile, nullptr, true});
     while (_undo.size() > 16)
         _undo.pop_front();
 }
@@ -1388,6 +1501,16 @@ bool SqlExecutor::undo(std::string& err) {
     }
     UndoEntry entry = std::move(_undo.back());
     _undo.pop_back();
+    if (entry.created) {
+        // FORK 回滚 = 删除新 profile（remove 内部失效有效视图缓存）。
+        if (!_mgr.remove(entry.profile)) {
+            // 新 profile 已被外部删除：沿用既有 undo() 错误约定（目标缺失 →
+            // false + err 说明）。条目已弹出——后续 undo 继续回滚更早的写。
+            err = "profile '" + entry.profile + "' no longer exists";
+            return false;
+        }
+        return true;
+    }
     Profile* prof = _mgr.find(entry.profile);
     if (!prof) {
         err = "profile '" + entry.profile + "' no longer exists";

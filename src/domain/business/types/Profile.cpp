@@ -1,6 +1,7 @@
 #include "Profile.h"
 #include "common/CommonTypes.h"
 #include "domain/business/components/Serializer.h" // for EnchantmentRegistry/EquipmentRegistry << >>
+#include "domain/business/components/TagResolver.h" // for clone() deep-copy of _tag_resolver
 
 #include <chrono>
 
@@ -126,7 +127,11 @@ Profile Profile::clone(const std::string& new_name) const {
     p._ench = _ench; // value-type deep copy
     p._eq = _eq;
     p._tags = _tags;
-    p._tag_resolver = _tag_resolver; // shared TagResolver carried across clone
+    // 用户裁决（片 2 全局约束 2/4）：clone 必须深拷贝 TagResolver——派生 profile
+    // （create_from/snapshot/branch/RegistryHelper::merge 派生路径）是独立快照，
+    // 改派生 tags.values 不得影响源。null 保持 null（无 resolver 不凭空创建）。
+    if (_tag_resolver)
+        p._tag_resolver = std::make_shared<TagResolver>(*_tag_resolver);
     return p;
 }
 

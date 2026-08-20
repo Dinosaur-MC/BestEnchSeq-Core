@@ -1777,4 +1777,63 @@ TEST_CASE("test_rename") {
     TEST_PASS("test_rename");
 }
 
+// ─── Test: Profile::clone 深拷贝 TagResolver（create_from/snapshot/branch
+//        派生独立回归门）──────────────────────────────────────────────────
+
+TEST_CASE("test_pm_clone_resolver_independence") {
+    ProfileManager pm;
+    auto& src = pm.create("test:src");
+    src.add_tag(EquipmentTag(NSID("#test:group"), "Group"));
+    src.add_tag(EquipmentTag(NSID("#test:weapons"), "Weapons"));
+    auto res = std::make_shared<TagResolver>();
+    res->add_tag("test:group", {"minecraft:sword", "minecraft:axe"});
+    res->add_tag("test:weapons", {"minecraft:sword"});
+    src.set_tag_resolver(res);
+
+    // 三种派生路径全部受益于 clone 深拷贝。
+    auto& cf = pm.create_from("test:src", "test:cf");
+    auto& snap = pm.snapshot("test:src", "test:snap");
+    auto& br = pm.branch("test:src", "test:branch");
+
+    // 派生初始拥有源 resolver 的副本（值一致、对象独立）。
+    for (const Profile* d : {&cf, &snap, &br}) {
+        expect(d->tag_resolver() != nullptr, "derived has resolver");
+        const auto* raw = d->tag_resolver()->raw_values("test:group");
+        expect(raw != nullptr && raw->size() == 2, "derived resolver seeded from source");
+    }
+
+    // 改派生 resolver → 源 raw_values 不变（深拷贝回归门）。
+    auto cf_res = cf.tag_resolver_ptr();
+    cf_res->add_tag("test:group", {"minecraft:bow"});
+    const auto* src_raw = src.tag_resolver()->raw_values("test:group");
+    expect(src_raw != nullptr && src_raw->size() == 2, "source raw values size unchanged");
+    bool has_sword = false, has_axe = false, has_bow = false;
+    for (const auto& v : *src_raw)
+        if (const auto* e = std::get_if<EntryRef>(&v)) {
+            has_sword = has_sword || e->id == "minecraft:sword";
+            has_axe = has_axe || e->id == "minecraft:axe";
+            has_bow = has_bow || e->id == "minecraft:bow";
+        }
+    expect(has_sword && has_axe && !has_bow, "source resolver untouched by derived mutation");
+    const auto* cf_raw = cf.tag_resolver()->raw_values("test:group");
+    expect(cf_raw != nullptr && cf_raw->size() == 1, "derived resolver updated");
+
+    // 反向：源改 → 派生不变。
+    src.tag_resolver_ptr()->add_tag("test:group", {"minecraft:shovel"});
+    const auto* cf_raw2 = cf.tag_resolver()->raw_values("test:group");
+    expect(cf_raw2 != nullptr && cf_raw2->size() == 1, "derived unaffected by source mutation");
+
+    // snapshot/branch 同样独立。
+    auto snap_res = snap.tag_resolver_ptr();
+    snap_res->add_tag("test:weapons", {"minecraft:bow"});
+    const auto* src_w = src.tag_resolver()->raw_values("test:weapons");
+    expect(src_w != nullptr && src_w->size() == 1, "snapshot mutation does not leak to source");
+    auto br_res = br.tag_resolver_ptr();
+    br_res->add_tag("test:weapons", {"minecraft:bow"});
+    const auto* snap_w = snap.tag_resolver()->raw_values("test:weapons");
+    expect(snap_w != nullptr && snap_w->size() == 1, "branch mutation does not leak to snapshot");
+
+    TEST_PASS("clone resolver independence");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────

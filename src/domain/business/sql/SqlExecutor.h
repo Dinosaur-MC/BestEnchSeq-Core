@@ -56,12 +56,16 @@ private:
     SqlResult exec_update(const UpdateStmt& s);
     SqlResult exec_delete(const DeleteStmt& s);
     SqlResult exec_copy(const CopyStmt& s);
+    SqlResult exec_merge(const MergeStmt& s);
+    SqlResult exec_fork(const ForkStmt& s);
 
     struct UndoEntry {
         std::string profile;
-        std::shared_ptr<Profile> snapshot;
+        std::shared_ptr<Profile> snapshot; // created 条目为 nullptr（快照无用）
+        bool created = false;              // true = 条目为 FORK 建的新 profile，undo = remove
     };
     void push_undo(const std::string& profile, Profile snapshot);
+    void push_undo_created(const std::string& profile);
 
     ProfileManager& _mgr;
     [[maybe_unused]] std::string _profiles_dir; // 供 Task 4 SAVE 使用

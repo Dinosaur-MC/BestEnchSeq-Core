@@ -420,3 +420,189 @@ TEST_CASE("sql_copy_missing_profiles") {
     expect(r4.affected == 0 && r4.message.find("bogus_col") != std::string::npos, "unknown column");
     TEST_PASS("copy missing profiles");
 }
+
+// ═══ Task 3: MERGE INTO / FORK + UNDO created ═══════════════════════════
+
+TEST_CASE("sql_merge_basic") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+    // dst 预置同名冲突行（ench + tag）：merge 后源胜出。
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:sword_ench','Existing',9,9,'#test:armor');");
+    run(ex, "INSERT INTO tags (id, name, values) VALUES ('#test:weapons','W','minecraft:test_axe');");
+
+    const auto r = run(ex, "MERGE INTO dst FROM src;");
+    expect(r.affected == 6, "affected = sum of source rows (2 ench + 2 eq + 2 tags)");
+    expect(r.message == "merged: 6 row(s) from src into dst", "merge message format");
+
+    // 并集源胜出（三表）。
+    expect(mgr.find("dst")->ench().size() == 3, "union: 3 enchantments");
+    expect(mgr.find("dst")->eq().size() == 3, "union: 3 equipment");
+    expect(mgr.find("dst")->tags().size() == 3, "union: 3 tags");
+    auto sel = run(ex, "SELECT name, max_level FROM enchantment WHERE id='test:sword_ench';");
+    expect(sel.rows[0][0] == "Sword Ench" && sel.rows[0][1] == "3", "source wins on enchantment conflict");
+
+    // resolver 同步：源 tag values 覆盖目标同名 tag；目标独有 tag 保留。
+    auto w = run(ex, "SELECT values FROM tags WHERE id='#test:weapons';");
+    expect(w.rows[0][0] == "minecraft:test_sword", "source values overwrite dest same-name tag");
+    auto a = run(ex, "SELECT values FROM tags WHERE id='#test:armor';");
+    expect(a.rows[0][0] == "minecraft:test_helmet", "dest-only tag values preserved");
+    auto all = run(ex, "SELECT values FROM tags WHERE id='#test:all';");
+    expect(all.rows[0][0] == "minecraft:test_sword", "raw #ref chain resolves via merged resolver");
+    // raw 层：#test:all 的 raw values 保留 #ref（TagRef 而非展开集合）。
+    const auto* raw_all = mgr.find("dst")->tag_resolver_ptr()->raw_values("test:all");
+    expect(raw_all != nullptr && raw_all->size() == 1, "raw values present for merged tag");
+    if (raw_all && !raw_all->empty()) {
+        const auto* t = std::get_if<TagRef>(&(*raw_all)[0]);
+        expect(t != nullptr && t->key == "test:weapons", "raw ref preserved as TagRef");
+    }
+    TEST_PASS("merge basic");
+}
+
+TEST_CASE("sql_merge_self_noop") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+
+    const auto r = run(ex, "MERGE INTO src FROM src;");
+    expect(r.affected == 0, "self-merge affected 0");
+    expect(r.message.find("merged: 0 row(s) from src into src") != std::string::npos, "self-merge message");
+    expect(mgr.find("src")->ench().size() == 2 && mgr.find("src")->eq().size() == 2 && mgr.find("src")->tags().size() == 2,
+           "self-merge no-op");
+    std::string err;
+    expect(!ex.undo(err), "self-merge records no undo snapshot");
+    TEST_PASS("merge self noop");
+}
+
+TEST_CASE("sql_merge_missing_profile") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+    const size_t before = mgr.find("dst")->ench().size();
+
+    auto r1 = run(ex, "MERGE INTO no_such FROM src;");
+    expect(r1.affected == 0 && r1.message.find("no_such") != std::string::npos, "unknown dest profile");
+    auto r2 = run(ex, "MERGE INTO dst FROM no_such;");
+    expect(r2.affected == 0 && r2.message.find("no_such") != std::string::npos, "unknown source profile");
+    expect(mgr.find("dst")->ench().size() == before, "no writes on error");
+    std::string err;
+    expect(!ex.undo(err), "failed merge records no undo snapshot");
+    TEST_PASS("merge missing profile");
+}
+
+TEST_CASE("sql_merge_undo") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+    // 预置冲突行（dest 版 sword_ench + 同名 tag #test:weapons 的 dest 原值）。
+    run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+            "('test:sword_ench','Existing',9,9,'#test:armor');");
+    run(ex, "INSERT INTO tags (id, name, values) VALUES ('#test:weapons','W','minecraft:test_axe');");
+    const size_t ench_before = mgr.find("dst")->ench().size();
+
+    auto r = run(ex, "MERGE INTO dst FROM src;");
+    expect(r.affected == 6, "merge applied");
+    // dst 已有冲突行 test:sword_ench（被源替换）→ 仅 sword_ench2 是纯新增。
+    expect(mgr.find("dst")->ench().size() == ench_before + 1, "dst grew by source-only rows");
+
+    std::string err;
+    expect(ex.undo(err), "merge undo");
+    // 整条回滚：注册表 + resolver 恢复语句前状态。
+    expect(mgr.find("dst")->ench().size() == ench_before, "registry restored");
+    auto sel = run(ex, "SELECT name, max_level FROM enchantment WHERE id='test:sword_ench';");
+    expect(sel.rows[0][0] == "Existing" && sel.rows[0][1] == "9", "conflict row back to dest value");
+    expect(!mgr.find("dst")->ench().contains(NSID("test:sword_ench2")), "source-only row removed");
+    auto w = run(ex, "SELECT values FROM tags WHERE id='#test:weapons';");
+    expect(w.rows[0][0] == "minecraft:test_axe", "resolver values restored to dest original");
+    expect(!mgr.find("dst")->tags().contains(NSID("#test:all")), "source-only tag removed");
+    TEST_PASS("merge undo");
+}
+
+TEST_CASE("sql_fork_basic") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+
+    const auto r = run(ex, "FORK src AS fork1;");
+    expect(r.affected == 1 && r.message == "forked: fork1", "fork success message");
+    expect(ex.current() == "dst", "fork does not switch current");
+    const Profile* f = mgr.find("fork1");
+    expect(f != nullptr, "derived profile exists");
+    expect(f->ench().size() == 2 && f->eq().size() == 2 && f->tags().size() == 2, "derived has all three tables");
+
+    // 独立性 gate：改派生 profile 的 tags.values → 源不变（resolver 隔离回归门）。
+    SqlExecutor fx(mgr, "profiles");
+    fx.set_current("fork1");
+    auto u = run(fx, "UPDATE tags SET values='minecraft:test_axe' WHERE id='#test:weapons';");
+    expect(u.affected == 1, "derived tag updated");
+    SqlExecutor src_ex(mgr, "profiles");
+    src_ex.set_current("src");
+    auto src_v = run(src_ex, "SELECT values FROM tags WHERE id='#test:weapons';");
+    expect(src_v.rows[0][0] == "minecraft:test_sword", "source resolver untouched by derived mutation");
+    TEST_PASS("fork basic");
+}
+
+TEST_CASE("sql_fork_errors") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+
+    auto r1 = run(ex, "FORK no_such AS x;");
+    expect(r1.affected == 0 && r1.message.find("no_such") != std::string::npos, "unknown source profile");
+    auto r2 = run(ex, "FORK src AS dst;");
+    expect(r2.affected == 0 && r2.message.find("dst") != std::string::npos, "dest already exists");
+    expect(!mgr.exists("x"), "no profile created on error");
+    expect(mgr.find("dst")->tags().size() == 1, "existing profile untouched");
+    std::string err;
+    expect(!ex.undo(err), "failed fork records no undo snapshot");
+    TEST_PASS("fork errors");
+}
+
+TEST_CASE("sql_fork_undo") {
+    ProfileManager mgr = make_src_dst();
+    SqlExecutor ex(mgr, "profiles");
+    ex.set_current("dst");
+
+    auto r = run(ex, "FORK src AS fork2;");
+    expect(r.affected == 1 && mgr.find("fork2") != nullptr, "fork created");
+    std::string err;
+    expect(ex.undo(err), "fork undo");
+    expect(mgr.find("fork2") == nullptr, "derived profile removed by undo");
+    expect(mgr.find("src") != nullptr, "source untouched");
+    expect(!ex.undo(err), "stack exhausted");
+    TEST_PASS("fork undo");
+}
+
+TEST_CASE("sql_undo_mixed_cross_profile") {
+    ProfileManager mgr = make_src_dst();
+    // 独立 setup executor 预置 dst 引用目标：其 INSERT 不入主栈，保证
+    // INSERT(src) → COPY(src→dst) 恰好两个 undo 条目（全局 LIFO 跨 profile）。
+    {
+        SqlExecutor setup(mgr, "profiles");
+        setup.set_current("dst");
+        run(setup, "INSERT INTO tags (id, name, values) VALUES ('#test:weapons','Weapons','minecraft:test_sword');");
+        run(setup, "INSERT INTO equipment (id, name, category) VALUES ('minecraft:test_sword','TS','#test:weapons');");
+    }
+    SqlExecutor ex(mgr, "profiles");
+
+    // 1) INSERT（src）。
+    ex.set_current("src");
+    auto i = run(ex, "INSERT INTO enchantment (id, name, max_level, multiplier, supported_items) VALUES "
+                     "('test:src_extra','SrcExtra',1,1,'#test:weapons');");
+    expect(i.affected == 1, "src insert");
+    // 2) COPY（src → dst）。
+    ex.set_current("dst");
+    auto c = run(ex, "COPY * FROM src INTO enchantment WHERE id='test:sword_ench';");
+    expect(c.affected == 1, "copy applied");
+    expect(mgr.find("dst")->ench().contains(NSID("test:sword_ench")), "copied row present");
+
+    // 3) UNDO → 回滚最近一次（COPY）；4) UNDO → 回滚 INSERT（全局 LIFO 跨 profile）。
+    std::string err;
+    expect(ex.undo(err), "undo 1 reverts copy (most recent)");
+    expect(!mgr.find("dst")->ench().contains(NSID("test:sword_ench")), "copy reverted");
+    expect(mgr.find("src")->ench().contains(NSID("test:src_extra")), "src insert kept");
+    expect(ex.undo(err), "undo 2 reverts insert");
+    expect(!mgr.find("src")->ench().contains(NSID("test:src_extra")), "insert reverted");
+    TEST_PASS("undo mixed cross profile");
+}
