@@ -936,6 +936,22 @@ TEST_CASE("system: profile sql repl hard error vs continuation") {
     TEST_PASS("system: profile sql repl hard error vs continuation");
 }
 
+TEST_CASE("system: profile sql repl illegal char hard error") {
+    const std::string bin = find_besq();
+    if (bin.empty()) {
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
+    }
+    // 非法字符 '&' → lexer 错误（lexer error: unexpected character '&'）必须硬
+    // 错误：立即 stderr 报错 + 清缓冲，绝不续行（无 ...> 提示）；QUIT 正常退出
+    auto r = run_besq(bin, {"--lang", "en_US", "profile", "sql", "-i"},
+                      "SELECT id FROM enchantment WHERE id='minecraft:sharpness' &\nQUIT\n", {});
+    expect_eq(r.exit_code, 0, "repl illegal: exit 0");
+    expect_contains(r.err, "unexpected character", "repl illegal: lexer error on stderr");
+    expect(r.out.find("...> ") == std::string::npos, "repl illegal: no continuation prompt (hard error)");
+    TEST_PASS("system: profile sql repl illegal char hard error");
+}
+
 TEST_CASE("system: profile sql repl help") {
     const std::string bin = find_besq();
     if (bin.empty()) {

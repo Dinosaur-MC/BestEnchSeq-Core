@@ -758,12 +758,9 @@ int CLIApp::run_sql_repl(const Config& config) {
         print_sql_messages(batch, config.sql_format, /*errors_to_stderr=*/true);
         print_sql_result(last, config.sql_format);
     };
-    // 提交累积缓冲 B（UNDO 命令先分发）
+    // 提交累积缓冲 B（两调用点已前置过滤 UNDO，这里只跑批；EOF 路径不走本函数）
     auto submit_buffer = [&]() {
-        if (is_undo(string_utils::trim(buffer)))
-            do_undo();
-        else
-            run_batch(buffer);
+        run_batch(buffer);
         buffer.clear();
     };
 
@@ -793,7 +790,7 @@ int CLIApp::run_sql_repl(const Config& config) {
 
         // 提交判定
         const std::string tb = string_utils::trim(buffer);
-        if (is_undo(tb)) {                     // UNDO（无分号形态；有分号形态走提交）
+        if (is_undo(tb)) {                     // is_undo 剥尾部 ';'：`undo` 与 `undo;` 都在此捕获
             do_undo();
             buffer.clear();
             continue;
@@ -808,7 +805,7 @@ int CLIApp::run_sql_repl(const Config& config) {
             submit_buffer();
             continue;
         }
-        if (parser.error.find("expected") != std::string::npos)
+        if (parser.error.starts_with("expected"))
             continue;                          // 续行（下一轮 ...> 提示，B 保留）
         std::cerr << parser.error << "\n";     // 硬错误（stderr，清 B）
         buffer.clear();
