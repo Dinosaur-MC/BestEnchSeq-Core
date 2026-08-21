@@ -21,14 +21,14 @@
 namespace cli_ctrl {
 
 bool solve_interrupt_gate(BesqContext* ctx) noexcept {
-    // 门控：仅求解中消费 ^C。solve_progress() 读 BesqContext 的原子 executor
-    // handle（无锁、无分配）——纯原子读取路径，pragma 级 async-signal-safe
-    // 接受（spec §3.2 注记：handler 已不调用任何 ctx 动作方法；严格信号安全
-    // 的替代方案是控制循环置位的活跃标志，此处取 solve_progress 以零 solve
-    // 分支改动覆盖 solve 与 resume 两路径）。
-    if (!ctx)
-        return false;
-    return ctx->solve_progress().state != algorithm::AlgorithmState::Idle;
+    // 门控：仅求解中消费 ^C。T1 review N1（binding）：旧实现读
+    // solve_progress()（BesqContext 的原子 shared_ptr handle load——内部有
+    // 锁，非严格信号安全），已改为纯原子 bool 活跃标志 g_solve_active（tty
+    // 控制循环启动 solver 前置位、join 后清位）——handler 只做原子 load，
+    // **严格 async-signal-safe**（spec §3.2 注记的旧"pragma 级接受"不再需要）。
+    // \p ctx 参数保留（历史调用/测试兼容），门控判定不依赖它。
+    (void)ctx;
+    return g_solve_active.load();
 }
 
 #ifdef _WIN32
@@ -41,7 +41,7 @@ bool solve_interrupt_gate(BesqContext* ctx) noexcept {
 BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
     if (ctrl_type != CTRL_C_EVENT)
         return FALSE;
-    if (!solve_interrupt_gate(g_interrupt_ctx.load()))
+    if (!solve_interrupt_gate(nullptr))
         return FALSE; // 非求解中：不拦截，走默认终止
     g_solve_interrupted.store(true);
     g_solve_control.store(SolveControlRequest::Abort);
@@ -51,15 +51,14 @@ BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
 #else
 
 /// POSIX SIGINT handler（信号上下文）。
-/// async-signal-safe：只做原子存储（std::atomic store = 无锁原子指令），不
-/// 调用任何 BesqContext 动作方法（abort_solve 由控制循环执行）。唯一非严格
-/// 部分是求解门控的 solve_progress() 读取（原子 load，无锁无分配，pragma 级
-/// 接受——spec §3.2 注记）。
+/// async-signal-safe：只做原子存储（std::atomic store = 无锁原子指令）+ 门控
+/// 的纯原子 bool load（g_solve_active，T1 review N1 门控修正）——不调用任何
+/// BesqContext 动作方法（abort_solve 由控制循环执行），**严格信号安全**。
 /// 非求解中：恢复默认处置并重发 SIGINT → 进程按默认语义终止。标准模式：
 /// raise() 时 SIGINT 仍被当前 handler 阻塞（sigaction 未设 SA_NODEFER），
 /// 重发信号挂起，handler 返回后按已恢复的默认处置投递 → 终止。
 extern "C" void sigint_handler(int) {
-    if (!solve_interrupt_gate(g_interrupt_ctx.load())) {
+    if (!solve_interrupt_gate(nullptr)) {
         ::signal(SIGINT, SIG_DFL);
         ::raise(SIGINT);
         return;

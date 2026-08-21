@@ -2126,12 +2126,196 @@ TEST_CASE("test_try_read_stdin_char_empty") {
 }
 
 TEST_CASE("test_ctrl_interrupt_gate_idle") {
-    // 门控非拦截语义（回归锁）：ctx 为空 / 存在但无在飞求解（state == Idle）→
-    // 门控必须为 false —— 即非 solve 命令（或求解间隙）按 ^C 走默认终止，符合
-    // 交互 UX 裁决。门控 true 分支（求解中）与真实信号路径为手工验证。
+    // 门控非拦截语义（回归锁）：无在飞求解（g_solve_active == false）→ 门控
+    // 必须为 false —— 即非 solve 命令（或求解间隙）按 ^C 走默认终止，符合
+    // 交互 UX 裁决。门控 true 分支（求解中）与真实信号路径为手工验证 +
+    // test_ctrl_interrupt_gate_active。
     expect(!cli_ctrl::solve_interrupt_gate(nullptr), "null ctx never intercepts");
     BesqContext ctx;
     ctx.load_builtin();
     expect(!cli_ctrl::solve_interrupt_gate(&ctx), "idle ctx (no in-flight solve) never intercepts");
     TEST_PASS("ctrl interrupt gate idle semantics");
+}
+
+// ---------------------------------------------------------------------------
+// 控制循环/状态机/中断路径（plan Task 2，spec §3.1/§3.3/§3.4/§3.6 + T1 review
+// N1 门控修正 / N4 扩展键 / N5 lost-interrupt 优先）：
+//   - 状态机裁决为**纯函数**（decide_solve_control，请求注入=直接传参），单测
+//     覆盖 §3.3 映射与 N5 粘性优先；
+//   - 控制循环本身经 tty 覆盖钩子（set_stdin_tty_override）在进程内驱动
+//     CLIApp::run（测试环境 stdin 为重定向文件：StdinCtrlGuard/try_read_stdin_char
+//     均安全 no-op），请求经原子槽 g_solve_control 预置注入；
+//   - 门控修正（N1）：g_solve_active 纯原子 bool 语义单测。
+// 真实信号/键盘路径（^C 经 handler、^P/^R/^S 经控制台读键）为手工验证
+// （见 task-2-report 手工验证清单）。
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_ctrl_decision_state_machine") {
+    // spec §3.3 状态机映射（纯函数）：Running（Abort/Pause 有效；Resume/Save
+    // 忽略）↔ Paused（Resume/Save/Abort 有效；Pause 忽略）。
+    using cli_ctrl::SolveControlRequest;
+    using cli_ctrl::SolveControlAction;
+    cli_ctrl::reset_solve_interrupted();
+    // Running
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Abort, false, false) == SolveControlAction::Abort,
+           "Running + Abort -> Abort");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Pause, false, false) == SolveControlAction::Pause,
+           "Running + Pause -> Pause");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Resume, false, false) == SolveControlAction::None,
+           "Running + Resume ignored");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Save, false, false) == SolveControlAction::None,
+           "Running + Save ignored");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::None, false, false) == SolveControlAction::None,
+           "Running + None");
+    // Paused
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Abort, false, true) == SolveControlAction::Abort,
+           "Paused + Abort -> Abort");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Pause, false, true) == SolveControlAction::None,
+           "Paused + Pause ignored");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Resume, false, true) == SolveControlAction::Resume,
+           "Paused + Resume -> Resume");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Save, false, true) == SolveControlAction::Save,
+           "Paused + Save -> Save");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::None, false, true) == SolveControlAction::None,
+           "Paused + None");
+    TEST_PASS("ctrl decision state machine");
+}
+
+TEST_CASE("test_ctrl_decision_sticky_priority") {
+    // T1 review N5（binding）：lost-interrupt 竞态——读键存储（^P/^R/^S）可能
+    // 落在 handler Abort 之后、循环 exchange 之前，单槽 last-write-wins 覆盖
+    // Abort 槽——粘性标志置位时无论槽位请求为何都必须裁决为 Abort。
+    using cli_ctrl::SolveControlRequest;
+    using cli_ctrl::SolveControlAction;
+    cli_ctrl::reset_solve_interrupted();
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Pause, true, false) == SolveControlAction::Abort,
+           "sticky beats Pause (Running)");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Pause, true, true) == SolveControlAction::Abort,
+           "sticky beats Pause (Paused)");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Resume, true, true) == SolveControlAction::Abort,
+           "sticky beats Resume");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::Save, true, true) == SolveControlAction::Abort,
+           "sticky beats Save");
+    expect(cli_ctrl::decide_solve_control(SolveControlRequest::None, true, false) == SolveControlAction::Abort,
+           "sticky alone -> Abort");
+    TEST_PASS("ctrl decision sticky priority");
+}
+
+TEST_CASE("test_ctrl_interrupt_gate_active") {
+    // T1 review N1（binding）：门控改为纯原子活跃标志 g_solve_active——不求解
+    // （false）→ 不拦截；求解中（true）→ 拦截（handler 路径语义；纯原子 load，
+    // 严格 async-signal-safe）。ctx 参数被忽略（门控只读活跃标志）。
+    BesqContext ctx;
+    ctx.load_builtin();
+    cli_ctrl::g_solve_active.store(false);
+    expect(!cli_ctrl::solve_interrupt_gate(nullptr), "inactive: gate false (null ctx)");
+    expect(!cli_ctrl::solve_interrupt_gate(&ctx), "inactive: gate false (any ctx)");
+    cli_ctrl::g_solve_active.store(true);
+    expect(cli_ctrl::solve_interrupt_gate(nullptr), "active: gate true");
+    cli_ctrl::g_solve_active.store(false);
+    expect(!cli_ctrl::solve_interrupt_gate(nullptr), "cleared: gate false again");
+    TEST_PASS("ctrl interrupt gate active flag");
+}
+
+// ---------------------------------------------------------------------------
+// 控制循环集成（请求槽注入 + tty 覆盖钩子）：进程内 CLIApp::run 的 tty 路径。
+// 测试环境 stdin 为重定向文件（非 tty），StdinCtrlGuard/try_read_stdin_char
+// 均为安全 no-op；set_stdin_tty_override(true) 只强制走控制循环分支。
+// ---------------------------------------------------------------------------
+
+/// 进程内 CLI 求解的 stdout/stderr 捕获（RAII 还原，与既有用例同款 rdbuf 交换）。
+struct CliSolveIoCapture {
+    std::stringstream out, err;
+    std::streambuf* saved_out;
+    std::streambuf* saved_err;
+    CliSolveIoCapture() : saved_out(std::cout.rdbuf(out.rdbuf())),
+                          saved_err(std::cerr.rdbuf(err.rdbuf())) {}
+    ~CliSolveIoCapture() {
+        std::cout.rdbuf(saved_out);
+        std::cerr.rdbuf(saved_err);
+    }
+};
+
+TEST_CASE("test_ctrl_interrupt_summary_exit1") {
+    // 中断路径（spec §3.6）：请求槽预置 Abort → tty 控制循环消费 → abort →
+    // 中断摘要（stderr，至少含耗时）→ exit 1，**不落入** unreachable 误报
+    // （先于 !success && empty 判断）；消费后粘性标志/槽位复位（下轮干净）。
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    cli_ctrl::set_stdin_tty_override(true);
+    struct RestoreTty {
+        ~RestoreTty() { cli_ctrl::set_stdin_tty_override(false); }
+    } restore_tty;
+    cli_ctrl::reset_solve_interrupted();
+    cli_ctrl::g_solve_control.store(cli_ctrl::SolveControlRequest::Abort);
+
+    CliSolveIoCapture cap;
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
+                          "--source", "sharpness=2", "--max-time", "60"};
+    const int rc = CLIApp().run(7, const_cast<char**>(argv));
+
+    expect_eq(rc, 1, "interrupted solve exits 1");
+    expect(cap.err.str().find("interrupted") != std::string::npos, "interrupt summary on stderr");
+    expect(cap.err.str().find("ms") != std::string::npos, "summary includes elapsed ms");
+    expect(cap.out.str().find("Target unreachable") == std::string::npos,
+           "interrupted solve does not fall into unreachable misreport");
+    expect(!cli_ctrl::g_solve_interrupted.load(), "sticky flag reset after consumption");
+    expect(cli_ctrl::g_solve_control.load() == cli_ctrl::SolveControlRequest::None,
+           "pending request cleared after consumption");
+    TEST_PASS("ctrl interrupt summary exit 1");
+}
+
+TEST_CASE("test_ctrl_sticky_beats_pause_slot") {
+    // T1 N5（binding）集成：槽位持 Pause 且粘性置位（模拟 handler 置位后被
+    // 读键 ^P 存储覆盖）→ 控制循环必须执行 Abort（中断摘要 + exit 1），
+    // 而非进入 Paused（不得出现 paused 提示）。
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    cli_ctrl::set_stdin_tty_override(true);
+    struct RestoreTty {
+        ~RestoreTty() { cli_ctrl::set_stdin_tty_override(false); }
+    } restore_tty;
+    cli_ctrl::reset_solve_interrupted();
+    cli_ctrl::g_solve_interrupted.store(true);                        // 粘性（handler 置位）
+    cli_ctrl::g_solve_control.store(cli_ctrl::SolveControlRequest::Pause);  // 槽位被覆盖为 Pause
+
+    CliSolveIoCapture cap;
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
+                          "--source", "sharpness=2", "--max-time", "60"};
+    const int rc = CLIApp().run(7, const_cast<char**>(argv));
+
+    expect_eq(rc, 1, "sticky + Pause slot -> exit 1 (Abort executed)");
+    expect(cap.err.str().find("interrupted") != std::string::npos,
+           "interrupt summary printed (Abort executed)");
+    expect(cap.err.str().find("paused") == std::string::npos,
+           "no paused hint (Pause NOT executed despite slot)");
+    expect(!cli_ctrl::g_solve_interrupted.load(), "sticky reset after consumption");
+    TEST_PASS("ctrl sticky beats pause slot");
+}
+
+TEST_CASE("test_ctrl_tty_solve_normal_rc0") {
+    // tty 控制循环正常路径（回归锁）：无请求 → 求解完成 → 进度行出现（单行
+    // 刷新 + 结束清行）→ 正常结果输出 + exit 0；无中断摘要；标志/槽位复位。
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+    cli_ctrl::set_stdin_tty_override(true);
+    struct RestoreTty {
+        ~RestoreTty() { cli_ctrl::set_stdin_tty_override(false); }
+    } restore_tty;
+    cli_ctrl::reset_solve_interrupted();
+
+    CliSolveIoCapture cap;
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
+                          "--source", "sharpness=2", "--max-time", "60"};
+    const int rc = CLIApp().run(7, const_cast<char**>(argv));
+
+    expect_eq(rc, 0, "tty-path normal solve exits 0");
+    expect(cap.out.str().find("Solving: ") != std::string::npos,
+           "progress line rendered (template + numbers)");
+    expect(cap.out.str().find("Target unreachable") == std::string::npos, "solve succeeded");
+    expect(cap.err.str().find("interrupted") == std::string::npos, "no interrupt summary");
+    expect(!cli_ctrl::g_solve_interrupted.load(), "sticky clear after normal run");
+    expect(cli_ctrl::g_solve_control.load() == cli_ctrl::SolveControlRequest::None,
+           "slot clear after normal run");
+    TEST_PASS("ctrl tty solve normal rc0");
 }

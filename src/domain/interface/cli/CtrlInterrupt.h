@@ -1,13 +1,14 @@
 #pragma once
 
 // ============================================================================
-// CtrlInterrupt — 控制符交互基础设施（spec §3.2 / plan Task 1）
+// CtrlInterrupt — 控制符交互基础设施（spec §3.2 / plan Task 1 + Task 2 集成）
 //
 // 控制循环架构（用户裁决扩展）：平台 ^C handler 与 stdin 控制字符读取**只置
 // 原子请求标志，绝不调用 BesqContext**；实际 ctx 调用（abort_solve /
 // pause_solve / resume_solve / save_solve_state）全部由控制循环（CLIApp 主
 // 线程，Task 2）每 ~200ms 周期 exchange 消费执行——POSIX signal handler
-// 因此 async-signal-safe（纯原子存储），Windows/POSIX 行为一致。
+// 因此严格 async-signal-safe（纯原子存储 + 纯原子 bool 门控 load），
+// Windows/POSIX 行为一致。
 //
 // 控制符集（用户裁决）：^C(\x03)=Abort、^P(\x10)=Pause、^R(\x12)=Resume、
 // ^S(\x13)=Save（仅 Paused 有效）。
@@ -23,8 +24,9 @@
 //      控制循环 exchange 消费）。
 //   2. g_solve_interrupted 粘性标志（Abort 请求置位时同步置位，供 Task 2 在
 //      solve 返回后输出中断摘要；reset_solve_interrupted() 复位）。
-//   3. stdin_is_tty() tty 门控 + g_interrupt_ctx（handler 求解门控读
-//      solve_progress 用）。
+//   3. stdin_is_tty() tty 门控（测试钩子 set_stdin_tty_override 可强制 true）
+//      + g_solve_active 求解活跃标志（handler 门控读它——纯原子 load，严格
+//      async-signal-safe；T1 review N1 门控修正，替代旧 solve_progress 读取）。
 //   4. register_solve_interrupt_handler()：平台 ^C handler（进程级一次，
 //      main 启动、tty 时；不注销），带求解门控（非求解 → 默认终止）。
 //   5. try_read_stdin_char() 非阻塞单字符读取。
@@ -32,6 +34,8 @@
 //      禁用防 ^S 流控吞键；Windows 清 ENABLE_LINE_INPUT|ENABLE_ECHO_INPUT），
 //      控制循环（Task 2）包住求解期间、析构恢复——REPL 等行输入消费方保持
 //      规范模式，零影响。
+//   7. decide_solve_control() 状态机裁决（纯函数，Task 2 控制循环消费；
+//      可单测——spec §3.3 + T1 review N5 粘性中断优先）。
 // ============================================================================
 
 #include <atomic>
@@ -63,14 +67,26 @@ inline std::atomic<SolveControlRequest> g_solve_control{SolveControlRequest::Non
 /// reset_solve_interrupted() 复位。
 inline std::atomic<bool> g_solve_interrupted{false};
 
-/// handler 可触达的 BesqContext 指针（求解门控读 solve_progress 用；CLIApp
-/// 构造注册 &_ctx、析构清除）。serve 路径不注册 → serve 下门控不通过 → ^C
-/// 默认终止，行为不变。
-inline std::atomic<BesqContext*> g_interrupt_ctx{nullptr};
+/// 求解活跃标志（T1 review N1 门控修正，binding）：tty 控制循环（CLIApp
+/// run_solve_control_loop）在启动 solver 线程前置位、join 后清位；平台
+/// handler 的求解门控读它（纯原子 bool load——严格 async-signal-safe，
+/// 替代旧 solve_progress() 门控的原子 shared_ptr load，后者内部有锁）。
+/// 非 tty / serve 恒 false → handler 门控不通过 → ^C 默认终止，行为不变。
+inline std::atomic<bool> g_solve_active{false};
 
 /// stdin 是否为交互终端（tty 门控）：仅 tty 注册 ^C handler + 控制循环读键。
 /// 非 tty（管道/脚本/CI）不注册——^C 走平台默认终止，输出零回归。
+/// 测试钩子 g_stdin_tty_override 可强制 true（控制循环路径进程内单测；
+/// 生产代码不调用）。
+inline std::atomic<bool> g_stdin_tty_override{false};
+
+/// 测试钩子：强制 stdin_is_tty() 返回 \p v（默认 false——测试环境 stdin 为
+/// 重定向文件）。仅供 tests 使用，生产代码不调用。
+inline void set_stdin_tty_override(bool v) noexcept { g_stdin_tty_override.store(v); }
+
 inline bool stdin_is_tty() noexcept {
+    if (g_stdin_tty_override.load())
+        return true;
 #ifdef _WIN32
     return ::_isatty(::_fileno(stdin)) != 0;
 #else
@@ -86,9 +102,41 @@ inline void reset_solve_interrupted() noexcept {
 }
 
 /// 求解门控：仅"当前有求解在运行"时 ^C handler 才消费 Abort（置请求，进程
-/// 存活）；非求解 → 走默认终止。\p ctx 为空或 solve_progress().state == Idle
-/// → false。实现于 CtrlInterrupt.cpp（需要完整 BesqContext 类型）。
+/// 存活）；非求解 → 走默认终止。T1 review N1（binding）：判定 = 纯原子活跃
+/// 标志 g_solve_active（tty 控制循环置位/清位），**不再读 solve_progress()**
+/// （原子 shared_ptr load 内部有锁，非严格信号安全）。\p ctx 参数保留（历史
+/// 调用/测试兼容），门控判定不依赖它。实现于 CtrlInterrupt.cpp。
 bool solve_interrupt_gate(BesqContext* ctx) noexcept;
+
+/// 状态机动作（控制循环执行体；spec §3.3）。
+enum class SolveControlAction : uint8_t { None, Abort, Pause, Resume, Save };
+
+/// 状态机裁决（纯函数，可单测；spec §3.3 + T1 review N5 lost-interrupt 优先）：
+/// - 粘性中断标志置位 → 恒 Abort（即使槽位持非 Abort 请求——读键存储
+///   ^P/^R/^S 落在 handler Abort 之后、循环 exchange 之前的单槽
+///   last-write-wins 竞态下，中断事实不丢）。
+/// - Running（\p paused=false）：Abort→Abort、Pause→Pause、Resume/Save→忽略。
+/// - Paused（\p paused=true）：Resume→Resume、Save→Save、Abort→Abort、
+///   Pause→忽略。
+inline SolveControlAction decide_solve_control(SolveControlRequest req,
+                                               bool sticky_interrupted,
+                                               bool paused) noexcept {
+    if (sticky_interrupted)
+        return SolveControlAction::Abort;
+    switch (req) {
+        case SolveControlRequest::Abort:
+            return SolveControlAction::Abort;
+        case SolveControlRequest::Pause:
+            return paused ? SolveControlAction::None : SolveControlAction::Pause;
+        case SolveControlRequest::Resume:
+            return paused ? SolveControlAction::Resume : SolveControlAction::None;
+        case SolveControlRequest::Save:
+            return paused ? SolveControlAction::Save : SolveControlAction::None;
+        case SolveControlRequest::None:
+            return SolveControlAction::None;
+    }
+    return SolveControlAction::None;
+}
 
 /// 注册平台 ^C handler（进程级一次；main 启动、stdin_is_tty() 时调用；不注销）：
 /// - Windows SetConsoleCtrlHandler：^C 且求解中 → 置 Abort 请求 + 中断标志，

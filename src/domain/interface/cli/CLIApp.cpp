@@ -19,11 +19,17 @@
 #include "domain/orchestration/components/OutputFormatter.h"
 #include "domain/orchestration/components/DatapackExporter.h"
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <chrono>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
+#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -83,20 +89,178 @@ void print_aligned_table(const std::vector<std::string>& headers,
     for (const auto& row : rows) std::cout << line(row) << "\n";
 }
 
+// ============================================================================
+// tty 控制循环（spec §3.1/§3.3/§3.4/§3.5；plan Task 2）——仅 stdin_is_tty()
+// 时调用；非 tty 保持主线程同步 solve（零回归）。
+// ============================================================================
+
+/// 唯一时间戳后缀（^S checkpoint 文件名唯一性；steady_clock 毫秒，跨平台）。
+std::string unique_ts_suffix() {
+    return std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+/// stdin 控制字符 → 请求映射（spec §3.2 控制符集）：^C(0x03)→Abort（安全网，
+/// 正常经信号/控制台事件送达）、^P(0x10)→Pause、^R(0x12)→Resume、
+/// ^S(0x13)→Save；其余无映射。
+std::optional<cli_ctrl::SolveControlRequest> map_ctrl_char(char c) noexcept {
+    switch (static_cast<unsigned char>(c)) {
+        case 0x03: return cli_ctrl::SolveControlRequest::Abort;
+        case 0x10: return cli_ctrl::SolveControlRequest::Pause;
+        case 0x12: return cli_ctrl::SolveControlRequest::Resume;
+        case 0x13: return cli_ctrl::SolveControlRequest::Save;
+        default: return std::nullopt;
+    }
+}
+
+/// tty 控制循环一次求解的结果：solver 线程产出 result/mode；循环附加
+/// interrupted（粘性中断事实）+ progress（中断时最后观察到的进度 0..1）。
+struct SolveRunOutcome {
+    SolveResult result;
+    AlgorithmMode mode = AlgorithmMode::direct;
+    bool interrupted = false;
+    double progress = 0.0;
+};
+
+/// 实时进度行刷新（spec §3.4）：`\r<模板>: <pct>% (<elapsed>s)` 单行 +
+/// \033[K 清尾（模板本地化一次，数字实时；elapsed = steady_clock 秒）。
+/// 返回本次观察到的进度（0..1），供中断摘要使用。
+double refresh_progress_line(BesqContext& ctx, const std::string& tpl,
+                             std::chrono::steady_clock::time_point start) {
+    const auto prog = ctx.solve_progress();
+    const int pct = static_cast<int>(prog.progress * 100.0 + 0.5);
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(
+                          std::chrono::steady_clock::now() - start).count();
+    std::cout << "\r" << tpl << ": " << pct << "% (" << secs << "s)\033[K" << std::flush;
+    return prog.progress;
+}
+
+/// ^S（Paused）checkpoint 持久化（spec §3.5）：自动路径
+/// `<BESQ_STATE_DIR>/solve-<unique>.ckpt`。BESQ_STATE_DIR 解析与
+/// AlgorithmExecutor/WebSolveService 同源（AppConfig::get().state_dir：
+/// env BESQ_STATE_DIR > config.json > 默认 <exe_dir>/states）。
+/// 成功 → stderr 消息（完整路径 + `--resume <path>` 命令）；失败 → 错误消息，
+/// 保持 Paused（save_solve_state 仅 Paused 态合法）。
+void save_checkpoint(BesqContext& ctx) {
+    const auto& cfg = AppConfig::get();
+    std::filesystem::path dir(cfg.state_dir);
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::string path = (dir / ("solve-" + unique_ts_suffix() + ".ckpt")).string();
+    if (ctx.save_solve_state(path))
+        std::cerr << "\n" << tr_fmt("cli.msg.solve_checkpoint_saved", path) << std::endl;
+    else
+        std::cerr << "\n" << tr_fmt("cli.msg.solve_checkpoint_failed", path) << std::endl;
+}
+
+/// 控制循环求解（spec §3.1；仅 tty 调用）：solver 线程跑 \p solver（solve /
+/// solve_from_checkpoint），主线程 ~200ms 循环——进度刷新 → 请求消费
+/// （exchange + 状态机裁决，T1 N5 粘性中断优先）→ stdin 控制字符映射置位 →
+/// 完成检测。循环退出 join + 清行（\r\033[K）；StdinCtrlGuard 包住求解期间
+/// （构造先于 solver 启动、析构在 join 后——终端原始化按求解周期恢复）；
+/// g_solve_active 求解活跃门控同步置位/清位（T1 N1 修正）。
+/// 完成检测 = solver 线程结束（唯一权威信号）：solve_progress().state 在
+/// 启动竞态下 handle 未发布会误报 Idle、Paused 态下会误退出——故不依赖
+/// （见 task-2-report 偏差注记）。中断事实（粘性标志）随时 break +
+/// 幂等 abort_solve 兜底（handler 在本周期消费后置位的情形），保证 join 尽快
+/// 返回。solver 异常捕获后于 join 后在主线程重抛（异常语义与非 tty 一致）。
+SolveRunOutcome run_solve_control_loop(BesqContext& ctx,
+                                       const std::function<SolveRunOutcome()>& solver) {
+    cli_ctrl::StdinCtrlGuard guard;              // 终端原始化（非 tty no-op）
+    cli_ctrl::g_solve_active.store(true);        // 门控（N1）：handler 可拦截 ^C
+
+    std::atomic<bool> solver_done{false};
+    std::exception_ptr solver_ex;
+    SolveRunOutcome outcome;
+    std::thread solver_thread([&] {
+        try {
+            outcome = solver();
+        } catch (...) {
+            solver_ex = std::current_exception();
+        }
+        solver_done.store(true);
+    });
+
+    const auto start = std::chrono::steady_clock::now();
+    const std::string progress_tpl = tr("cli.msg.solve_progress");
+    bool paused = false;
+    while (true) {
+        // 1. 实时进度行（Paused 期间冻结——暂停提示不被覆盖）
+        if (!paused)
+            outcome.progress = refresh_progress_line(ctx, progress_tpl, start);
+
+        // 2. 请求消费 + 状态机（spec §3.3；T1 N5：粘性中断优先于槽位请求）
+        const bool sticky = cli_ctrl::g_solve_interrupted.load();
+        const auto req = cli_ctrl::g_solve_control.exchange(cli_ctrl::SolveControlRequest::None);
+        switch (cli_ctrl::decide_solve_control(req, sticky, paused)) {
+            case cli_ctrl::SolveControlAction::Abort:
+                cli_ctrl::g_solve_interrupted.store(true);
+                ctx.abort_solve();
+                break;
+            case cli_ctrl::SolveControlAction::Pause:
+                ctx.pause_solve();               // 阻塞到 quiesced → state Paused
+                paused = true;
+                outcome.progress = ctx.solve_progress().progress;
+                // 一次性 stderr 提示（不换行——回 Running 后进度行 \r 覆盖，
+                // 裁决：清/覆盖）
+                std::cerr << tr_fmt("cli.msg.solve_paused",
+                                    std::chrono::duration_cast<std::chrono::seconds>(
+                                        std::chrono::steady_clock::now() - start).count())
+                          << std::flush;
+                break;
+            case cli_ctrl::SolveControlAction::Resume:
+                ctx.resume_solve();
+                paused = false;
+                break;
+            case cli_ctrl::SolveControlAction::Save:
+                save_checkpoint(ctx);            // 保持 Paused
+                break;
+            case cli_ctrl::SolveControlAction::None:
+                break;
+        }
+
+        // 3. stdin 控制字符 → 请求（T1 review N4：忽略 Windows 扩展键首字节
+        //    0xE0/0x00——组合键扫描码后续字节无映射，逐周期自然丢弃）
+        char c = 0;
+        if (cli_ctrl::try_read_stdin_char(c)) {
+            if (c != '\xE0' && c != '\x00') {
+                if (const auto mapped = map_ctrl_char(c); mapped)
+                    cli_ctrl::g_solve_control.store(*mapped);
+            }
+        }
+
+        // 4. 完成检测（粘性中断即 break——幂等 abort 兜底 join 尽快返回）
+        if (cli_ctrl::g_solve_interrupted.load()) {
+            ctx.abort_solve();
+            break;
+        }
+        if (solver_done.load())
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    solver_thread.join();                        // 先于 guard 析构 / 门控清除
+    cli_ctrl::g_solve_active.store(false);       // 门控（N1）：join 后不再拦截
+    std::cout << "\r\033[K" << std::flush;       // 清行（spec §3.4 结束清理）
+    // join 后再读粘性标志（handler 迟到置位不丢中断事实）；摘要后由调用方复位
+    outcome.interrupted = cli_ctrl::g_solve_interrupted.load();
+    if (solver_ex)
+        std::rethrow_exception(solver_ex);
+    return outcome;
+}
+
 } // namespace
 
 CLIApp::CLIApp()
     : _ctx()
 {
     _ctx.load_builtin();
-    // 让 main 启动时注册的 ^C handler 可触达本会话 ctx（CtrlInterrupt.h）：
-    // 求解中 ^C → abort_solve（CLIApp 存活期内指针恒有效；析构时清除防悬垂）。
-    cli_ctrl::g_interrupt_ctx.store(&_ctx);
+    // ^C 拦截门控（T1 review N1 修正）：求解活跃标志 g_solve_active 由 tty
+    // 控制循环（run_solve_control_loop）置位/清位——platform handler 经
+    // solve_interrupt_gate 读它（纯原子 bool），无需 ctx 指针注册。
 }
 
 CLIApp::~CLIApp() {
-    // 会话消亡后 handler 不得再触达 _ctx（进程即将退出，此处为一致性收尾）。
-    cli_ctrl::g_interrupt_ctx.store(nullptr);
     // RAII safety net: whatever path run() took (including exceptions thrown
     // mid-run), flush CLI output + drain the async Logger queue while this
     // process is still alive.  The implicit flush at process exit is
@@ -267,20 +431,59 @@ int CLIApp::run(int argc, char* argv[]) {
         // 空组合 → 保持默认（builtin:vanilla）
     }
 
-    // 4. Resume from checkpoint (self-contained: no target/source needed)
-    if (config.resume) {
-        auto ck = _ctx.solve_from_checkpoint(*config.resume);
-        auto output = _ctx.format(ck.result, ck.mode, config.format);
+    // 中断检测 + 结果输出（solve/resume 共用，spec §3.6）：
+    //   被中断 → stderr 摘要（至少耗时 + 进度）→ exit 1；**先于** unreachable
+    //   判断（不落入误报）；摘要后复位（下轮干净）。
+    //   \p check_unreachable 仅 solve 传 true（resume 原路径无 unreachable
+    //   判断——非 tty resume 保持逐字节不变）。
+    const auto finish = [&](const SolveRunOutcome& out, bool check_unreachable) -> int {
+        if (out.interrupted) {
+            std::cerr << tr_fmt("cli.msg.solve_interrupted", out.result.computation_time_ms,
+                                static_cast<int>(out.progress * 100.0 + 0.5)) << std::endl;
+            cli_ctrl::reset_solve_interrupted();
+            flush_output();
+            return 1;
+        }
+        // When the pipeline determines the target is unreachable (conflicting
+        // enchantments, missing prerequisites, etc.), it returns an empty
+        // solution set.  Surface this to the user instead of printing nothing.
+        if (check_unreachable && !out.result.success && out.result.solutions.empty())
+            throw std::runtime_error(tr("cli.err.unreachable_target"));
+        auto output = _ctx.format(out.result, out.mode, config.format);
         if (config.output) {
-            std::ofstream out(*config.output);
-            if (!out) throw std::runtime_error(
+            std::ofstream out_file(*config.output);
+            if (!out_file) throw std::runtime_error(
                 tr_fmt("main.err.output_failed", *config.output));
-            out << output;
+            out_file << output;
         } else {
             std::cout << output;
         }
+        cli_ctrl::reset_solve_interrupted();
         flush_output();
         return 0;
+    };
+
+    // 4. Resume from checkpoint (self-contained: no target/source needed)
+    if (config.resume) {
+        if (cli_ctrl::stdin_is_tty()) {
+            // tty 交互路径：控制循环（进度 + 状态机 + 中断检测）包裹
+            // solve_from_checkpoint（spec §3.1 同款）。
+            const SolveRunOutcome out = run_solve_control_loop(_ctx, [&]() -> SolveRunOutcome {
+                SolveRunOutcome o;
+                auto ck = _ctx.solve_from_checkpoint(*config.resume);
+                o.result = ck.result;
+                o.mode = ck.mode;
+                return o;
+            });
+            return finish(out, /*check_unreachable=*/false);
+        }
+        {
+            auto ck = _ctx.solve_from_checkpoint(*config.resume);
+            SolveRunOutcome out;
+            out.result = ck.result;
+            out.mode = ck.mode;
+            return finish(out, /*check_unreachable=*/false);
+        }
     }
 
     // 5. Solve
@@ -288,26 +491,23 @@ int CLIApp::run(int argc, char* argv[]) {
         SolveRequest request = CLIApp::build_solve_request(config, _ctx);
 
         OutputFormatter::set_show_nsid(config.verbose);
-        auto result = _ctx.solve(request);
 
-        // When the pipeline determines the target is unreachable (conflicting
-        // enchantments, missing prerequisites, etc.), it returns an empty
-        // solution set.  Surface this to the user instead of printing nothing.
-        if (!result.success && result.solutions.empty()) {
-            throw std::runtime_error(tr("cli.err.unreachable_target"));
+        if (cli_ctrl::stdin_is_tty()) {
+            // tty 交互路径：solver 线程 + 主线程控制循环（spec §3.1）
+            const SolveRunOutcome out = run_solve_control_loop(_ctx, [&]() -> SolveRunOutcome {
+                SolveRunOutcome o;
+                o.result = _ctx.solve(request);
+                o.mode = request.mode;
+                return o;
+            });
+            return finish(out, /*check_unreachable=*/true);
         }
-
-        auto output = _ctx.format(result, request.mode, config.format);
-
-        if (config.output) {
-            std::ofstream out(*config.output);
-            if (!out) throw std::runtime_error(
-                tr_fmt("main.err.output_failed", *config.output));
-            out << output;
-        } else {
-            std::cout << output;
+        {
+            SolveRunOutcome out;
+            out.result = _ctx.solve(request);
+            out.mode = request.mode;
+            return finish(out, /*check_unreachable=*/true);
         }
-        flush_output();
     }
 
     return 0;
