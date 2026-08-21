@@ -2201,6 +2201,20 @@ TEST_CASE("test_ctrl_decision_sticky_priority") {
     TEST_PASS("ctrl decision sticky priority");
 }
 
+TEST_CASE("test_ctrl_char_mapping") {
+    // F1（最终全分支审查 ruling）：控制符映射表（spec §3.2 控制符集）——原在
+    // CLIApp.cpp 匿名命名空间零测试覆盖（键盘交付不可 CI 测，单测是唯一覆盖）；
+    // 移入 CtrlInterrupt.h inline 后直接单测：^C(0x03)→Abort / ^P(0x10)→Pause /
+    // ^R(0x12)→Resume / ^S(0x13)→Save / 未映射（'a'）→nullopt。
+    using cli_ctrl::SolveControlRequest;
+    expect(cli_ctrl::map_ctrl_char('\x03') == SolveControlRequest::Abort, "^C(0x03) -> Abort");
+    expect(cli_ctrl::map_ctrl_char('\x10') == SolveControlRequest::Pause, "^P(0x10) -> Pause");
+    expect(cli_ctrl::map_ctrl_char('\x12') == SolveControlRequest::Resume, "^R(0x12) -> Resume");
+    expect(cli_ctrl::map_ctrl_char('\x13') == SolveControlRequest::Save, "^S(0x13) -> Save");
+    expect(!cli_ctrl::map_ctrl_char('a').has_value(), "unmapped char 'a' -> nullopt");
+    TEST_PASS("ctrl char mapping table");
+}
+
 TEST_CASE("test_ctrl_interrupt_gate_active") {
     // T1 review N1（binding）：门控改为纯原子活跃标志 g_solve_active——不求解
     // （false）→ 不拦截；求解中（true）→ 拦截（handler 路径语义；纯原子 load，

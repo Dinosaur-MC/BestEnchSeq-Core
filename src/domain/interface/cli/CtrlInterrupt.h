@@ -36,12 +36,15 @@
 //      规范模式，零影响。
 //   7. decide_solve_control() 状态机裁决（纯函数，Task 2 控制循环消费；
 //      可单测——spec §3.3 + T1 review N5 粘性中断优先）。
+//   8. map_ctrl_char() 控制符映射表（纯函数，可单测——spec §3.2；final review
+//      F1 自 CLIApp.cpp 匿名命名空间移入 inline，获得单测覆盖）。
 // ============================================================================
 
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <optional>
 
 #ifdef _WIN32
 #include <io.h>
@@ -136,6 +139,20 @@ inline SolveControlAction decide_solve_control(SolveControlRequest req,
             return SolveControlAction::None;
     }
     return SolveControlAction::None;
+}
+
+/// stdin 控制字符 → 请求映射（spec §3.2 控制符集）：^C(0x03)→Abort（安全网，
+/// 正常经信号/控制台事件送达）、^P(0x10)→Pause、^R(0x12)→Resume、
+/// ^S(0x13)→Save；其余无映射。纯函数，可单测（final review F1：自 CLIApp.cpp
+/// 匿名命名空间移入 inline——此前为唯一无测试覆盖的链路环节）。
+inline std::optional<SolveControlRequest> map_ctrl_char(char c) noexcept {
+    switch (static_cast<unsigned char>(c)) {
+        case 0x03: return SolveControlRequest::Abort;
+        case 0x10: return SolveControlRequest::Pause;
+        case 0x12: return SolveControlRequest::Resume;
+        case 0x13: return SolveControlRequest::Save;
+        default: return std::nullopt;
+    }
 }
 
 /// 注册平台 ^C handler（进程级一次；main 启动、stdin_is_tty() 时调用；不注销）：

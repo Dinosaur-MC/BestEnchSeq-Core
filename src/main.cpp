@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) try {
     // tty 门控：仅 stdin 为交互终端时注册平台 ^C handler；管道/脚本/CI 不注册
     // （^C 走平台默认终止，行为零回归）。handler 内部再按"当前是否求解中"门控
     // （solve_interrupt_gate）：非求解时也不拦截（走默认终止）——serve 路径不
-    // 注册 ctx 指针（CtrlInterrupt.h），^C 语义与注册前一致。进程级注册一次，
+    // 跑控制循环，g_solve_active 恒 false → 门控不通过 → ^C 默认终止。进程级注册一次，
     // 不注销（进程生命周期）。
     if (cli_ctrl::stdin_is_tty())
         cli_ctrl::register_solve_interrupt_handler();

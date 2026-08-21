@@ -100,19 +100,6 @@ std::string unique_ts_suffix() {
                               std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
-/// stdin 控制字符 → 请求映射（spec §3.2 控制符集）：^C(0x03)→Abort（安全网，
-/// 正常经信号/控制台事件送达）、^P(0x10)→Pause、^R(0x12)→Resume、
-/// ^S(0x13)→Save；其余无映射。
-std::optional<cli_ctrl::SolveControlRequest> map_ctrl_char(char c) noexcept {
-    switch (static_cast<unsigned char>(c)) {
-        case 0x03: return cli_ctrl::SolveControlRequest::Abort;
-        case 0x10: return cli_ctrl::SolveControlRequest::Pause;
-        case 0x12: return cli_ctrl::SolveControlRequest::Resume;
-        case 0x13: return cli_ctrl::SolveControlRequest::Save;
-        default: return std::nullopt;
-    }
-}
-
 /// tty 控制循环一次求解的结果：solver 线程产出 result/mode；循环附加
 /// interrupted（粘性中断事实）+ progress（中断时最后观察到的进度 0..1，
 /// 主线程 join 后独占赋值——见 run_solve_control_loop N1 注记）。
@@ -233,7 +220,7 @@ SolveRunOutcome run_solve_control_loop(BesqContext& ctx,
         char c = 0;
         if (cli_ctrl::try_read_stdin_char(c)) {
             if (c != '\xE0' && c != '\x00') {
-                if (const auto mapped = map_ctrl_char(c); mapped)
+                if (const auto mapped = cli_ctrl::map_ctrl_char(c); mapped)
                     cli_ctrl::g_solve_control.store(*mapped);
             }
         }
