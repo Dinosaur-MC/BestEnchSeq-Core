@@ -4,6 +4,7 @@
 #include "common/log/log.hpp"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/cli/CtrlInterrupt.h"
 #include "domain/interface/components/BuiltinI18n.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/RateLimiter.h"
@@ -107,6 +108,15 @@ int main(int argc, char* argv[]) try {
 
     // ── Logger setup ──
     setup_logger(app_cfg.logger_config());
+
+    // ── 控制符交互基础设施（^C 优雅中断，spec §3.2 / plan Task 1）──
+    // tty 门控：仅 stdin 为交互终端时注册平台 ^C handler；管道/脚本/CI 不注册
+    // （^C 走平台默认终止，行为零回归）。handler 内部再按"当前是否求解中"门控
+    // （solve_interrupt_gate）：非求解时也不拦截（走默认终止）——serve 路径不
+    // 注册 ctx 指针（CtrlInterrupt.h），^C 语义与注册前一致。进程级注册一次，
+    // 不注销（进程生命周期）。
+    if (cli_ctrl::stdin_is_tty())
+        cli_ctrl::register_solve_interrupt_handler();
 
     // ── Detect target app and route ──
     // 切片 1：CLIParser 子命令体系。serve 走 run_serve；其余（solve/profile/algo）

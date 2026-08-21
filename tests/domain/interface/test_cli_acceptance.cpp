@@ -6,6 +6,11 @@
 // --resume, profile export) parse correctly.
 // =============================================================================
 
+// freopen/stdin 重定向回归锁（stdin_is_tty 非 tty 语义）用到的 CRT 调用在 MSVC
+// 下被标 deprecated——与 EnvUtil.hpp 同款裁决（_CRT_SECURE_NO_WARNINGS，仓库
+// 既有模式），须在首个 CRT 头 include 前定义。
+#define _CRT_SECURE_NO_WARNINGS
+
 #define BESQ_TEST_MAIN
 #include "AppConfig.h"
 #include "domain/interface/components/BuiltinI18n.h"
@@ -14,7 +19,14 @@
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/cli/CtrlInterrupt.h"
 #include "framework/test_framework.h"
+
+#ifdef _WIN32
+#include <io.h>   // _dup/_dup2/_close/_fileno（stdin 重定向回归锁）
+#else
+#include <unistd.h> // dup/dup2/close/fileno
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -2004,4 +2016,122 @@ TEST_CASE("cli_slice_sql_profile_targets_non_active") {
     }
     std::filesystem::remove_all(tmp, ec);
     TEST_PASS("sql --profile targets non-active profile");
+}
+
+// ---------------------------------------------------------------------------
+// 控制符交互基础设施（plan Task 1，spec §3.2）：请求标志语义 / stdin_is_tty
+// 非 tty 回归锁 / try_read_stdin_char 空输入 / 门控非拦截语义。平台 handler 的
+// 信号路径 + 控制台读键为手工验证（见 task-1-report）。
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_ctrl_control_request_semantics") {
+    // 请求标志基本语义（spec §3.2 控制循环架构）：默认 None；四个请求可置位；
+    // exchange(None) 取走并复位（控制循环每 ~200ms 消费语义）；reset 清空
+    // （含粘性中断标志，下一轮求解干净）。
+    using cli_ctrl::SolveControlRequest;
+    cli_ctrl::reset_solve_interrupted();
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::None, "request defaults to None");
+    cli_ctrl::g_solve_control.store(SolveControlRequest::Abort);
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::Abort, "Abort set");
+    expect(cli_ctrl::g_solve_control.exchange(SolveControlRequest::None) == SolveControlRequest::Abort,
+           "exchange(None) consumes the pending request");
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::None, "request cleared after exchange");
+    cli_ctrl::g_solve_control.store(SolveControlRequest::Pause);
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::Pause, "Pause set");
+    cli_ctrl::g_solve_control.store(SolveControlRequest::Resume);
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::Resume, "Resume set");
+    cli_ctrl::g_solve_control.store(SolveControlRequest::Save);
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::Save, "Save set");
+    cli_ctrl::reset_solve_interrupted();
+    expect(cli_ctrl::g_solve_control.load() == SolveControlRequest::None, "reset clears pending request");
+    expect(!cli_ctrl::g_solve_interrupted.load(), "reset clears sticky interrupted flag");
+    TEST_PASS("ctrl control request semantics");
+}
+
+TEST_CASE("test_ctrl_interrupt_flag_semantics") {
+    // 粘性中断标志基本语义：初始 false → 置位 → 复位（Task 2 消费后复位，
+    // 保证下轮干净；Abort 请求置位时 handler 同步置位，见 CtrlInterrupt.cpp）。
+    cli_ctrl::reset_solve_interrupted();
+    expect(!cli_ctrl::g_solve_interrupted.load(), "flag starts cleared");
+    cli_ctrl::g_solve_interrupted.store(true);
+    expect(cli_ctrl::g_solve_interrupted.load(), "flag reads set");
+    cli_ctrl::reset_solve_interrupted();
+    expect(!cli_ctrl::g_solve_interrupted.load(), "flag reset by reset_solve_interrupted");
+    TEST_PASS("ctrl interrupt flag semantics");
+}
+
+TEST_CASE("test_stdin_is_tty_non_tty_lock") {
+    // 回归锁：stdin 重定向到普通文件（非终端）时 stdin_is_tty() 必须为 false ——
+    // 这是 tty 门控的测试环境语义（管道/脚本/CI 下 stdin 恒非 tty），也是"非 tty
+    // 零回归"承诺的根基。注意不能用平台 null 设备（Windows NUL 是字符设备，
+    // _isatty 视为 tty）——必须用真实文件。保存原始句柄并还原，避免影响同进程
+    // 其他用例（用例按序执行，期间无并发 stdin 访问）。
+    const std::filesystem::path tmp =
+        std::filesystem::temp_directory_path() / "besq_stdin_tty_lock.txt";
+    {
+        std::ofstream f(tmp);
+        f << "x";
+    }
+#ifdef _WIN32
+    const int saved = ::_dup(::_fileno(stdin));
+#else
+    const int saved = ::dup(::fileno(stdin));
+#endif
+    expect(saved >= 0, "dup original stdin fd for restore");
+    FILE* f = std::freopen(tmp.string().c_str(), "r", stdin);
+    expect(f != nullptr, "freopen stdin to a regular file");
+    expect(!cli_ctrl::stdin_is_tty(), "file-redirected (non-tty) stdin reports false");
+#ifdef _WIN32
+    ::_dup2(saved, ::_fileno(stdin));
+    ::_close(saved);
+#else
+    ::dup2(saved, ::fileno(stdin));
+    ::close(saved);
+#endif
+    std::error_code ec;
+    std::filesystem::remove(tmp, ec);
+    TEST_PASS("stdin_is_tty non-tty lock");
+}
+
+TEST_CASE("test_try_read_stdin_char_empty") {
+    // 回归锁：stdin 重定向到空文件（无可读数据）→ try_read_stdin_char 返回
+    // false 且不阻塞（控制循环每 ~200ms 调用一次的前提）。跨平台确定性：
+    // Windows _kbhit（非控制台 → 恒 0）；POSIX poll（EOF → read 0 → false）。
+    const std::filesystem::path tmp =
+        std::filesystem::temp_directory_path() / "besq_stdin_char_lock.txt";
+    {
+        std::ofstream f(tmp);
+        f << ""; // 空文件
+    }
+#ifdef _WIN32
+    const int saved = ::_dup(::_fileno(stdin));
+#else
+    const int saved = ::dup(::fileno(stdin));
+#endif
+    expect(saved >= 0, "dup original stdin fd for restore");
+    FILE* f = std::freopen(tmp.string().c_str(), "r", stdin);
+    expect(f != nullptr, "freopen stdin to an empty file");
+    char c = 'x';
+    expect(!cli_ctrl::try_read_stdin_char(c), "empty stdin reports nothing readable (non-blocking)");
+#ifdef _WIN32
+    ::_dup2(saved, ::_fileno(stdin));
+    ::_close(saved);
+#else
+    ::dup2(saved, ::fileno(stdin));
+    ::close(saved);
+#endif
+    std::error_code ec;
+    std::filesystem::remove(tmp, ec);
+    TEST_PASS("try_read_stdin_char empty lock");
+}
+
+TEST_CASE("test_ctrl_interrupt_gate_idle") {
+    // 门控非拦截语义（回归锁）：ctx 为空 / 存在但无在飞求解（state == Idle）→
+    // 门控必须为 false —— 即非 solve 命令（或求解间隙）按 ^C 走默认终止，符合
+    // 交互 UX 裁决。门控 true 分支（求解中）与真实信号路径为手工验证。
+    expect(!cli_ctrl::solve_interrupt_gate(nullptr), "null ctx never intercepts");
+    BesqContext ctx;
+    ctx.load_builtin();
+    expect(!cli_ctrl::solve_interrupt_gate(&ctx), "idle ctx (no in-flight solve) never intercepts");
+    TEST_PASS("ctrl interrupt gate idle semantics");
 }

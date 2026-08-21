@@ -1,4 +1,5 @@
 #include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/cli/CtrlInterrupt.h"
 #include "AppConfig.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/InventoryParser.h"
@@ -88,9 +89,14 @@ CLIApp::CLIApp()
     : _ctx()
 {
     _ctx.load_builtin();
+    // 让 main 启动时注册的 ^C handler 可触达本会话 ctx（CtrlInterrupt.h）：
+    // 求解中 ^C → abort_solve（CLIApp 存活期内指针恒有效；析构时清除防悬垂）。
+    cli_ctrl::g_interrupt_ctx.store(&_ctx);
 }
 
 CLIApp::~CLIApp() {
+    // 会话消亡后 handler 不得再触达 _ctx（进程即将退出，此处为一致性收尾）。
+    cli_ctrl::g_interrupt_ctx.store(nullptr);
     // RAII safety net: whatever path run() took (including exceptions thrown
     // mid-run), flush CLI output + drain the async Logger queue while this
     // process is still alive.  The implicit flush at process exit is
