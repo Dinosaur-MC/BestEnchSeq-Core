@@ -26,7 +26,7 @@
     <text x="335" y="62" class="bl" font-size="14px" font-weight="700">besq</text>
     <text x="335" y="82" class="sb">CLI · C ABI</text>
     <rect x="510" y="36" width="230" height="64" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
-    <text x="625" y="62" class="bl" font-size="14px" font-weight="700">besq --api serve</text>
+    <text x="625" y="62" class="bl" font-size="14px" font-weight="700">besq serve</text>
     <text x="625" y="82" class="sb">HTTP service (REST + SSE)</text>
     <rect x="45" y="140" width="870" height="120" rx="10" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
     <text x="65" y="162" class="ttl">interface/ — I/O boundary</text>
@@ -38,7 +38,7 @@
     <text x="455.0" y="214" class="sb">CLIParser v2 · besq.h</text>
     <rect x="605" y="172" width="280" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
     <text x="745.0" y="196" class="bl">HTTP framework + Web module</text>
-    <text x="745.0" y="214" class="sb">8 controllers · SSE · 41 routes</text>
+    <text x="745.0" y="214" class="sb">8 controllers · SSE · 45 routes</text>
     <rect x="45" y="300" width="870" height="120" rx="10" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.5"/>
     <text x="65" y="322" class="ttl">orchestration/ — cross-domain glue</text>
     <rect x="75" y="332" width="260" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>

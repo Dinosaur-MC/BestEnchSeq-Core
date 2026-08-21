@@ -158,8 +158,8 @@ A solution may have `is_success: false` if the target cannot be reached:
 }
 ```
 
-### No --target (export only)
-When `--export` is used without `--target`, no JSON output is produced. Instead, the profile data file is written.
+### No --target (profile export)
+When `profile export --file <path>` is used without a solve target, no JSON output is produced. Instead, the profile data file is written.
 
 ---
 

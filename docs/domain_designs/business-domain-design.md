@@ -87,6 +87,12 @@ src/domain/business/
 │
 ├── ProfileManager.h/cpp                        ← Profile 生命周期 + 依赖图/有效视图/稳定 CRUD/发布/datapack（业务域入口）
 │
+├── sql/                                        ← 类 SQL 层（profile sql，零 interface 依赖）
+│   ├── SqlLexer.h/cpp                          Tokenizer（语句切分 + 引号/续行处理）
+│   ├── SqlParser.h/cpp                         Statement AST（SELECT/SHOW/INSERT/UPDATE/DELETE/USE/COPY/MERGE/FORK/SAVE/UNDO/STATUS）
+│   ├── SqlExecutor.h/cpp                       语句执行（单 profile 增删改查 + 跨 profile 三档 FK）
+│   └── SqlSession.h/cpp                        常驻会话（USE/UNDO 栈 16/脏集合/基线，供 REPL 与 BesqContext::create_sql_session）
+│
 └── components/
     ├── RegistryHelper.h/cpp                     Filter, set operations, validation, diff（原 RegistryManager）
     ├── FormatDetector.h/cpp                     File format detection + dispatch

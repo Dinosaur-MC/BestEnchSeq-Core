@@ -1,7 +1,7 @@
 # BestEnchSeq-Core 架构总览
 
 > 面向新开发者的入口文档：约 30 分钟建立全局认知。
-> **事实以代码为准**——本文最后核对于 2026-08-13，与 `CLAUDE.md`（开发操作指南）、`docs/project-design.md`（设计理念详述）、`docs/domain_designs/*`（各域详细设计）互补。
+> **事实以代码为准**——本文最后核对于 2026-08-21，与 `CLAUDE.md`（开发操作指南）、`docs/project-design.md`（设计理念详述）、`docs/domain_designs/*`（各域详细设计）互补。
 
 ---
 
@@ -213,7 +213,7 @@ class IForgeEngine {
 
 | 面 | 入口 | 说明 |
 |---|---|---|
-| CLI | `besq` | 28 选项（v2 模板解析器 `CLIParser`，编译期 OptionTable 校验、`duplicate_option` 诊断、help 分组、i18n 错误） |
+| CLI | `besq` | 24 顶层条目（20 个 solve 选项 + 4 个命令：`solve`/`profile`/`algo`/`serve`；v2 模板解析器 `CLIParser`，编译期 OptionTable 校验、`duplicate_option` 诊断、help 分组、i18n 错误） |
 | C ABI | `include/besq/besq.h` | 29 个 `besq_*` 函数；错误 = last_error + -1/nullptr；JSON 交换 |
 | HTTP | `besq serve` | 8 控制器 27+ 路由（见下表）；错误信封 `{ok, error}` |
 | SSE | `besq serve` | `event: progress/diag/completed/failed + data: JSON`；15s 心跳；logs 流为纯 data 帧 |
@@ -256,7 +256,7 @@ POST /api/tasks → Connection（增量解析、请求走私防护）→ Router
   → CalculatorController::submit → WebSolveService::start
       （单活动槽 409 TASK_ACTIVE；202 + Location）
 GET /api/tasks/{id}/events → SseHub.subscribe(replay_last=true) + 立即回放 progress 帧
-Worker 线程：持 _ctx_gate（串行化 ProfileManager 有效视图缓存访问）
+Worker 线程：`_ctx_gate` 仅在快照构建（`solve_snapshot`）与结果 format 期间持锁（WebSolveService.cpp:270-293, 366-369）；solve 本体跑在自包含快照上，全程无锁、零 Profile 引用
   → 200ms 采样线程 → WebDiagObserver attach → BesqContext::solve → format
   → 发布 completed/failed 帧 → SseHub（锁外回调）→ Reactor 帧汇（weak_ptr 捕获）
       → 连接归属的 loop 线程 push_sse_frame → sock_send_nb
@@ -298,7 +298,7 @@ vanilla.json / CSV / datapack(pack.mcmeta) → FormatDetector → 三解析器 �
 7. **诊断事件驱动 + 性能 Tier 分层**——算法线程零锁非阻塞入队；计数器按 Tier 分级，热路径默认零成本
 8. **数据驱动一切**——魔咒/装备/tag 全部来自数据文件；datapack 可作为 Profile 加载；算法通过 `AlgorithmRegistry` 字符串工厂注册
 9. **可复用库形态**——`besq-http`（自研 HTTP 服务器）、`common-cli`（解析器）、`common/ds`（header-only schema 引擎）都是零业务依赖的独立单元
-10. **并发不变量显式化**——连接零锁、关闭唯一归属、锁外回调、`_ctx_gate` 串行化——每个共享状态都有明确的拥有者
+10. **并发不变量显式化**——连接零锁、关闭唯一归属、锁外回调、`_ctx_gate` 仅在快照构建/format 期间持锁（solve 全程无锁）——每个共享状态都有明确的拥有者
 11. **i18n 全链路**——用户可见输出全部 `tr()`；机器格式（compact/json）与日志不本地化；`--lang` > `BESQ_LANG` > 系统 locale
 
 ---

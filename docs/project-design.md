@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：2.3 · 最后更新：2026-08-13
+> 版本：2.4 · 最后更新：2026-08-21
 
 ---
 
@@ -123,7 +123,7 @@ struct ForgeConfig {
 
 ```
 外部输入（CLI 参数 / C ABI 调用）
-  → interface/cli/parse_cli()          CLIConfig
+  → interface/cli/CLIApp（CLIParser v2 命令树，CLIConfig 已并入 Config）
   → interface/cli/EnchParser           字符串 → EnchSet
   → interface/cli/ItemParser           字符串 → Item
   → 组装 SolveRequest                  (orchestration/types/SolveRequest.h)
@@ -171,7 +171,7 @@ Profile (ench() + eq() + tags() 三元组)
 ```
 
 内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `BuiltinData`（domain/business/loaders/）读取嵌入的 vanilla.json（raw 字节来自 builtin 统一 raw 访问器，由 CMake `besq_embed_resources()` 自动生成）。
-`--import` CLI 选项调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。
+`profile import <file>` 子命令调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。（CLIApp.cpp:1175-1176）
 
 ### 注册表体系
 
@@ -308,16 +308,21 @@ Algorithm domain (src/domain/algorithm/registries/):
 **loaders/**：DTO ↔ 注册表/Profile 转换（`RegistryLoader`、`ProfileLoader`）
 **ProfileManager**（业务域顶层）：Profile 生命周期与依赖图/有效视图（`| & + -` 运算符位于 `components/RegistryHelper`）
 **components/**：`FormatDetector`（格式检测+自动分派）、`Serializer`（JSON ADL 委托）、`TagResolver`（标签解析）、`RegistryHelper`（集合运算，原 `RegistryManager`）
+**sql/**：类 SQL 层（`SqlLexer`/`SqlParser`/`SqlExecutor`/`SqlSession`）——`profile sql` 语句级原子 + UNDO 栈（16）+ 跨 profile COPY/MERGE/FORK/USE + 三档 FK，零 interface 依赖
 
 ### `src/domain/interface/`（接口域）
 
 纯翻译层，无业务逻辑。
 
 - `BesqContext`：应用会话外观，持有 ProfileManager 和 AlgorithmLoader，委托所有操作到 orchestration pipeline
-- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--edit`（切片 2 交互立项）解析内联在 CLIApp 中
+- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）、`InventoryParser`、`CtrlInterrupt`（tty 控制符交互）；`--edit` 已移除，编辑能力由 `profile sql`（SQL 层）取代，`CLIApp::apply_edits` 作为未被调用的死代码保留
 - **components/**：`ParserShared`（接口层共享解析助手）+ 可复用 `http/` 框架（`HttpServer`/`Router`/`Connection`/SSE，独立库 `besq-http`）
 - **abi/**：`CAbiBindings`（C ABI 包装，JSON 交换）
-- **web/**：`WebModule`（8 控制器：Health/Status/Settings/Profiles/Algorithm/Calculator/Fs/Logs，`_ctx_gate` 串行化）+ `WebSolveService`（worker 线程 + `SseHub` SSE 推送，最后一帧重放）
+- **web/**：`WebModule`（8 控制器：Health/Status/Settings/Profiles/Algorithm/Calculator/Fs/**History**；`_ctx_gate` 仅在快照构建与 format 期间持锁，solve 跑在自包含快照上全程无锁）+ `WebSolveService`（worker 线程 + `SseHub` SSE 推送，最后一帧重放）
+
+#### CLI 命令树与交互（2026-08 重构后）
+
+顶层即 `solve`（默认，别名 `calc`）：全局 `--help/-h --verbose/-v --version/-V --list-langs --lang`，solve 选项 `--algorithm/--algo --target/-t --source/-s --platform/--mce --format/-f --solutions/-n --memory --max-time --max-threads/-j --algo-opt --input/-i --output/-o --resume --config/-c --profile`（默认 `builtin:vanilla`）；4 个子命令：`profile`（`list`/`set_dir`/`import`/`export`/`info`/`publish`/`inspect`/`sql`）、`algo`（别名 `algorithm`；`list`/`set_dir`/`inspect`）、`serve`（`--host --port --workers --res-dir`）。`profile inspect <profile> <kind> [--filter --fields --limit --page --format] [--effective]` 可切换为依赖合并有效视图（solve 消费同一视图）；`profile sql [<stmt>] [--profile <key>] [-i] [--format text|json]` 为类 SQL 增删改查 + 跨 profile COPY/MERGE/FORK/USE（语句级原子 + UNDO 栈，`-i` 行驱动 REPL）。solve 在 tty 下自动启用控制符交互：实时进度行（`\r <pct>% (<elapsed>s)`）、`^C` 优雅中断（摘要 + exit 1）、`^P` 暂停、`^R` 恢复、`^S` 保存 checkpoint（`<BESQ_STATE_DIR>/solve-<ts>.ckpt` + `--resume <path>` 提示）；非 tty（管道/脚本）行为不变。
 
 ### `src/domain/orchestration/`（编排域）
 

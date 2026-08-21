@@ -57,7 +57,9 @@ src/domain/interface/
 ├── cli/                              ← CLI module
 │   ├── CLIApp.h/cpp                  CLI entry: CLIApp::Config, CLIApp::parse(), CLIApp::run()
 │   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
-│   └── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│   ├── InventoryParser.h/cpp         --input JSON → inventory solve request
+│   └── CtrlInterrupt.h/cpp           tty 控制符交互（^C/^P/^R/^S 状态机 + 进度行）
 │
 ├── components/                       ← Reusable components (no CLI dependency)
 │
@@ -127,6 +129,11 @@ public:
 
     // ── Profile data import / export ──
     bool export_profile(const std::string& path) const;
+
+    // ── SQL layer (profile sql) ──
+    business::sql::SqlRunResult run_sql(const std::string& statements, const std::string& profile, std::string& error);
+    std::unique_ptr<business::sql::SqlSession> create_sql_session(const std::string& profile);
+    bool sql_message_is_error(const std::string& message) const;
 
     // ── Algorithm ──
     size_t load_algorithms(const std::string& dir_path);
@@ -210,11 +217,12 @@ auto parse(const OptionTable<Entries...>&, std::span<const char*>)
     -> ParseResult<Entries...>;
 ```
 
-Key features: compile-time option validation (consteval), type-safe `from_string<T>()`, error accumulation (never throw), pluggable i18n via `DiagnosticTranslator` concept, auto-generated `format_help()`. See `docs/superpowers/specs/2026-07-27-cliparser-modernization-design.md`.
+Key features: compile-time option validation (consteval), type-safe `from_string<T>()`, error accumulation (never throw), pluggable i18n via `DiagnosticTranslator` concept, auto-generated `format_help()`. See `docs/superpowers/specs/2026-08-19-cli-subcommand-design.md`.
 
-**cli.h/cpp** — Business-aware CLI layer, with i18n support via `common/i18n/Language.h`:
+**cli.h/cpp** — （已移除：CLI 模板解析器取代）Business-aware CLI layer, with i18n support via `common/i18n/Language.h`:
 
 ```cpp
+// REMOVED — CLIApp::Config / CLIApp::parse() / CLIApp::run() 取代 parse_cli()/CLIConfig
 struct CLIConfig {
     std::string algorithm = "hamming";
     std::string mode      = "direct";
@@ -311,7 +319,9 @@ src/domain/interface/
 ├── cli/                              ← CLI module
 │   ├── CLIApp.h/cpp                  CLI entry: CLIApp::Config, CLIApp::parse(), CLIApp::run()
 │   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
-│   └── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│   ├── InventoryParser.h/cpp         --input JSON → inventory solve request
+│   └── CtrlInterrupt.h/cpp           tty 控制符交互（^C/^P/^R/^S 状态机 + 进度行）
 │
 ├── components/                       ← Reusable components (no CLI dependency)
 │
@@ -319,4 +329,4 @@ src/domain/interface/
     └── CAbiBindings.cpp              C ABI implementation
 ```
 
-CLIParser now lives in `src/common/utils/cli/` — see `docs/superpowers/specs/2026-07-27-cliparser-modernization-design.md`.
+CLIParser now lives in `src/common/utils/cli/` — see `docs/superpowers/specs/2026-08-19-cli-subcommand-design.md`.

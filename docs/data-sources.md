@@ -769,7 +769,7 @@ besq 支持把真实 MC 数据包（datapack）直接加载为一个 profile，�
 
 `datapack` profile 的 `dependencies()` 保持为空：内置 `builtin:vanilla` 作为**隐式基准**，由 `cross_validate` 无条件收集（B-T14 M-5），而非写入依赖链。
 
-**扫描与 CLI**：默认扫描 `<cwd>/profiles/`（`BesqContext::set_profiles_dir(dir)` 可覆盖，CLI 用 `profile set_dir <dir>`，或 `BESQ_PROFILES_DIR` 环境变量）。`--profile <key>` 激活任意字符串 key 的 profile；`--publish <key> [--publish-version <v> --publish-tag <t>]` 将有效视图拍平为自包含 JSON。
+**扫描与 CLI**：默认扫描 `<exe_dir>/profiles/`（`BesqContext::set_profiles_dir(dir)` 可覆盖，CLI 用 `profile set_dir <dir>`，或 `BESQ_PROFILES_DIR` 环境变量）。`--profile <key>` 激活任意字符串 key 的 profile；`profile publish <key> [--version <v> --tag <t>]` 将有效视图拍平为自包含 JSON。
 
 ---
 

@@ -575,7 +575,7 @@ main.cpp
 
 | Component | Location | Notes |
 |-----------|----------|-------|
-| `CLI/cli.h/.cpp` | `interface/` | CLI argument parsing |
+| `CLI/cli.h/.cpp` | —（已移除：`CLIApp`/`CLIParser` v2 取代） | CLI 参数解析（现由 `interface/cli/CLIApp` + `common/utils/cli/CLIParser` 承担） |
 | `BesqContext` | `interface/` | Application facade, delegates to orchestration |
 | `CompactAdapter` | `orchestration/components/` | Already in orchestration, just Profile-ified |
 | `OutputFormatter` | `orchestration/components/` | Already in orchestration, just Profile-ified |
@@ -589,8 +589,8 @@ main.cpp
 
 ```
 CLI args
-  → interface/cli/parse_cli()         → CLIConfig
-  → interface/cli/build_target()      → Item + EnchSet
+  → interface/cli/CLIApp::parse()      → CLIApp::Config（CLIConfig 已移除）
+  → interface/cli/EnchParser/ItemParser → Item + EnchSet（build_target() 已移除）
   → Assemble SolveRequest
   → orchestration/SolvePipeline::run()
        │
