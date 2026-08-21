@@ -27,9 +27,12 @@
 #include "domain/orchestration/pipelines/SolvePipeline.h"
 #include "domain/orchestration/types/SolveSnapshot.h"
 #include "framework/test_framework.h"
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -183,9 +186,121 @@ void test_resume_from_checkpoint() {
     TEST_PASS("solve_from_checkpoint: resume produces a full result");
 }
 
+/// T3 持久化门（spec §3.5 / plan Task 3）：`save_solve_state`（^S 落盘路径）
+/// → `solve_from_checkpoint`（--resume 恢复路径）API 级往返。^S 与 --resume
+/// 依赖的正是这条持久化契约：暂停中的求解序列化到磁盘，新上下文（模拟新
+/// 进程）从同一冻结点恢复并跑出与原求解一致的结果。
+///
+/// 流程：1) 后台线程跑 dp_merge（自定义魔咒目标，搜索足够久以便暂停可靠）；
+/// 2) 主线程 pause_solve() 至 Paused → save_solve_state(ckpt) 断言成功且文件
+/// 非空；3) resume 原求解至完成（result_orig）；4) 全新 BesqContext
+/// solve_from_checkpoint(ckpt)（result_resumed）；5) 断言两结果关键属性一致
+/// （success / solutions 数 / 最优解成本 / algorithm / mode）——同一冻结状态
+/// 确定性续算必须产出相同结果。
+void test_save_solve_state_roundtrip() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // 自定义剑魔咒（镜像 test_besq_abort_concurrent 的 in-flight 模式）：足够
+    // 多的目标魔咒让 dp_merge 指数搜索在暂停窗口内保持 Running，又不至于让
+    // 完整求解超出测试预算（web 测试的 18 魔咒重任务在 Debug 下远超预算）。
+    constexpr int kEnchCount = 12;
+    for (int i = 0; i < kEnchCount; ++i) {
+        EnchInfo info;
+        info.id = NSID("test:ench_" + std::to_string(i));
+        info.name = "Test Ench " + std::to_string(i);
+        info.max_level = 5;
+        info.multiplier = 1;
+        info.supported_items.insert(NSID("#minecraft:swords"));
+        expect(ctx.add_enchantment(info), "add custom enchantment test:ench_" + std::to_string(i));
+    }
+
+    Item target_item;
+    target_item.id = NSID("minecraft:diamond_sword");
+    for (int i = 0; i < kEnchCount; ++i)
+        target_item.enchantments.emplace(NSID("test:ench_" + std::to_string(i)), 5);
+    if (auto eq_it = ctx.equipment().find(NSID("minecraft:diamond_sword")); eq_it != ctx.equipment().end())
+        target_item.durability = eq_it->max_durability;
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::direct;
+    request.payload = DirectPayload{};
+    request.algorithm = "dp_merge";
+    request.forge_config.platform = MCE::Java;
+    request.search_config.max_solutions = 4;
+    // 安全上限：若 pause/save 失败，求解不能无限跑（框架 per-case 超时兜底）。
+    request.search_config.max_search_time = std::chrono::milliseconds(30000);
+
+    const std::string ck_path = (std::filesystem::temp_directory_path() / "besq_ckpt_roundtrip.ckpt").string();
+    std::error_code ec;
+    std::filesystem::remove(ck_path, ec);
+
+    // ── 原求解：后台线程 + 暂停 + 保存 + 恢复至完成 ──
+    // 每轮尝试启动一个新鲜求解；pause_solve() 阻塞至 quiesced（Completed 上
+    // 是 no-op）→ 检查 Paused；已暂停则 save（成功即退出循环，线程保持存活
+    // 至 resume 后 join）；未暂停/保存失败则 abort + join 后重试（与 web 测试
+    // 的 pause 重试模式一致，防快机器上求解抢先完成）。
+    SolveResult orig;
+    std::string solve_error;
+    bool saved = false;
+    std::thread solver;
+    for (int attempt = 0; attempt < 3 && !saved; ++attempt) {
+        std::atomic<bool> done{false};
+        solver = std::thread([&] {
+            try {
+                orig = ctx.solve(request);
+            } catch (const std::exception& e) {
+                solve_error = e.what();
+            }
+            done = true;
+        });
+
+        // 等 executor handle 发布（state != Idle，或求解已结束）
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (std::chrono::steady_clock::now() < deadline && !done.load() &&
+               ctx.solve_progress().state == algorithm::AlgorithmState::Idle)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ctx.pause_solve();
+        const bool paused = ctx.solve_progress().state == algorithm::AlgorithmState::Paused;
+        if (paused)
+            saved = ctx.save_solve_state(ck_path);
+        if (saved) {
+            ctx.resume_solve();   // 原求解从同一冻结点继续 → 完成
+            solver.join();
+            break;
+        }
+        ctx.abort_solve();        // 未暂停或保存失败 → 取消本尝试
+        solver.join();
+    }
+    expect(saved, "solve paused + save_solve_state roundtrip (retry loop)");
+    expect(solve_error.empty(), "original solve must not throw (got: " + solve_error + ")");
+    expect(orig.success && !orig.solutions.empty(), "original solve completed with solutions");
+    expect(std::filesystem::exists(ck_path), "checkpoint file written");
+    expect(std::filesystem::file_size(ck_path) > 0, "checkpoint file non-empty");
+
+    // ── 新上下文（模拟新进程）：从磁盘 checkpoint 恢复 ──
+    BesqContext ctx2;
+    ctx2.load_builtin();
+    auto ck = ctx2.solve_from_checkpoint(ck_path);
+    expect(ck.result.success && !ck.result.solutions.empty(), "resumed solve produces solutions");
+    expect(ck.result.algorithm_used == "dp_merge", "algorithm taken from checkpoint tag");
+    expect(ck.mode == AlgorithmMode::direct, "mode taken from checkpoint input");
+
+    // ── 恢复结果与原求解关键属性一致（同一冻结状态确定性续算）──
+    expect(ck.result.solutions.size() == orig.solutions.size(),
+           "resumed solution count matches original");
+    if (!ck.result.solutions.empty() && !orig.solutions.empty())
+        expect(ck.result.solutions[0].total_exp_level_cost == orig.solutions[0].total_exp_level_cost,
+               "resumed best-solution cost matches original");
+
+    std::filesystem::remove(ck_path, ec);
+    TEST_PASS("save_solve_state → solve_from_checkpoint roundtrip");
+}
+
 } // anonymous namespace
 
-TEST_CASE("test_solve_pipeline") {
+TEST_CASE_TIMEOUT("test_solve_pipeline", 180) {
     register_builtin_translations(LanguageManager::instance());
     LanguageManager::instance().select("en_US");
 
@@ -193,4 +308,5 @@ TEST_CASE("test_solve_pipeline") {
     test_unsupported_mode();
     test_conflicting_target_not_solvable();
     test_resume_from_checkpoint();
+    test_save_solve_state_roundtrip();
 }

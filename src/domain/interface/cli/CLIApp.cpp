@@ -114,7 +114,8 @@ std::optional<cli_ctrl::SolveControlRequest> map_ctrl_char(char c) noexcept {
 }
 
 /// tty 控制循环一次求解的结果：solver 线程产出 result/mode；循环附加
-/// interrupted（粘性中断事实）+ progress（中断时最后观察到的进度 0..1）。
+/// interrupted（粘性中断事实）+ progress（中断时最后观察到的进度 0..1，
+/// 主线程 join 后独占赋值——见 run_solve_control_loop N1 注记）。
 struct SolveRunOutcome {
     SolveResult result;
     AlgorithmMode mode = AlgorithmMode::direct;
@@ -138,7 +139,8 @@ double refresh_progress_line(BesqContext& ctx, const std::string& tpl,
 /// ^S（Paused）checkpoint 持久化（spec §3.5）：自动路径
 /// `<BESQ_STATE_DIR>/solve-<unique>.ckpt`。BESQ_STATE_DIR 解析与
 /// AlgorithmExecutor/WebSolveService 同源（AppConfig::get().state_dir：
-/// env BESQ_STATE_DIR > config.json > 默认 <exe_dir>/states）。
+/// env BESQ_STATE_DIR > 默认 <exe_dir>/states——config.json 层不读
+/// state_dir，仅 lang/log/profiles_dir/algo_dir 从 config.json 读取）。
 /// 成功 → stderr 消息（完整路径 + `--resume <path>` 命令）；失败 → 错误消息，
 /// 保持 Paused（save_solve_state 仅 Paused 态合法）。
 void save_checkpoint(BesqContext& ctx) {
@@ -183,11 +185,18 @@ SolveRunOutcome run_solve_control_loop(BesqContext& ctx,
 
     const auto start = std::chrono::steady_clock::now();
     const std::string progress_tpl = tr("cli.msg.solve_progress");
+    // N1（T2 review 发现，binding）：进度由主线程局部变量观测——solver 线程
+    // 并发写整个 outcome（`outcome = solver()`），主线程若同时写
+    // outcome.progress（非原子 double 成员）即构成双写数据竞争（正式 UB，
+    // x86-64 对齐 8B 下良性，但 sanitizer/架构可见）。join 后才把最后观测值
+    // 写回 outcome.progress（solver 线程已终止，无竞争）——中断摘要因此显示
+    // 真实最后观测进度而非结构赋值覆盖的 0。
+    double last_progress = 0.0;
     bool paused = false;
     while (true) {
         // 1. 实时进度行（Paused 期间冻结——暂停提示不被覆盖）
         if (!paused)
-            outcome.progress = refresh_progress_line(ctx, progress_tpl, start);
+            last_progress = refresh_progress_line(ctx, progress_tpl, start);
 
         // 2. 请求消费 + 状态机（spec §3.3；T1 N5：粘性中断优先于槽位请求）
         const bool sticky = cli_ctrl::g_solve_interrupted.load();
@@ -200,7 +209,7 @@ SolveRunOutcome run_solve_control_loop(BesqContext& ctx,
             case cli_ctrl::SolveControlAction::Pause:
                 ctx.pause_solve();               // 阻塞到 quiesced → state Paused
                 paused = true;
-                outcome.progress = ctx.solve_progress().progress;
+                last_progress = ctx.solve_progress().progress;
                 // 一次性 stderr 提示（不换行——回 Running 后进度行 \r 覆盖，
                 // 裁决：清/覆盖）
                 std::cerr << tr_fmt("cli.msg.solve_paused",
@@ -244,6 +253,7 @@ SolveRunOutcome run_solve_control_loop(BesqContext& ctx,
     std::cout << "\r\033[K" << std::flush;       // 清行（spec §3.4 结束清理）
     // join 后再读粘性标志（handler 迟到置位不丢中断事实）；摘要后由调用方复位
     outcome.interrupted = cli_ctrl::g_solve_interrupted.load();
+    outcome.progress = last_progress;   // N1：join 后主线程独占赋值（无竞争）
     if (solver_ex)
         std::rethrow_exception(solver_ex);
     return outcome;

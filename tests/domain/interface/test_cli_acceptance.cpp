@@ -2257,6 +2257,11 @@ TEST_CASE("test_ctrl_interrupt_summary_exit1") {
     expect_eq(rc, 1, "interrupted solve exits 1");
     expect(cap.err.str().find("interrupted") != std::string::npos, "interrupt summary on stderr");
     expect(cap.err.str().find("ms") != std::string::npos, "summary includes elapsed ms");
+    // N1 观察面（T3）：摘要必须携带进度字段（模板 `(progress {1}%)`）——修复后
+    // 该值 = 主线程最后观测到的真实进度（join 后赋值，无竞争）。非零值断言
+    // 不可行（预置 Abort 首周期即消费，进度观测恒为 0；无 fake-solver 注入
+    // 钩子）——格式锁为确定性的替代（见 task-3-report 注记）。
+    expect(cap.err.str().find("progress") != std::string::npos, "summary includes progress field");
     expect(cap.out.str().find("Target unreachable") == std::string::npos,
            "interrupted solve does not fall into unreachable misreport");
     expect(!cli_ctrl::g_solve_interrupted.load(), "sticky flag reset after consumption");
