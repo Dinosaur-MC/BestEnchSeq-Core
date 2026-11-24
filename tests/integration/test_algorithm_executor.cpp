@@ -341,7 +341,11 @@ AlgorithmInput make_large_direct_input() {
     // search runs until the 200ms Executor timeout cancels it.  The
     // stoppable parallel_for makes the post-cancel drain prompt even at this
     // size (previously ~4 minutes of unwinding the 2^26 mask range).
-    return make_direct_input(26, /*max_lvl=*/5, /*level=*/5, std::chrono::milliseconds(200));
+    auto input = make_direct_input(26, /*max_lvl=*/5, /*level=*/5, std::chrono::milliseconds(200));
+    // 26 equal books are trivial for the weight-class fast path; this test
+    // covers the general search's timeout/cancel drain, so opt out.
+    input.config.search.extra["dp_merge.weight_class"] = "off";
+    return input;
 }
 
 // A REACHABLE input that completes quickly, proving dp_merge still finds real

@@ -1638,9 +1638,9 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
                     throw std::runtime_error(tr("cli.err.inventory_requires_target"));
             }
             request.payload = InventoryPayload{std::move(inv.items), std::move(inv.priorities)};
-            // algorithm：CLI 显式 > JSON > 默认 hamming
+            // algorithm：CLI 显式 > JSON > 默认 bb_dp（库存模式精确搜索）
             request.algorithm = config.algorithm_explicit ? config.algorithm
-                : (!inv.algorithm.empty() ? inv.algorithm : "hamming");
+                : (!inv.algorithm.empty() ? inv.algorithm : "bb_dp");
         } else {
             // ── --source 物品列表（逗号分隔 item 或 item[ench]）→ inventory ──
             std::vector<Item> items;
@@ -1657,9 +1657,9 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
                 throw std::runtime_error(tr_fmt("cli.err.invalid_value", config.source));
             request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
             request.payload = InventoryPayload{std::move(items), {}};
-            // 物品列表 inventory：显式 --algorithm 优先，否则默认 hamming
-            //（与 --input JSON 路径一致；dp_merge 为 direct-only）
-            request.algorithm = config.algorithm_explicit ? config.algorithm : "hamming";
+            // 物品列表 inventory：显式 --algorithm 优先，否则默认 bb_dp
+            //（与 --input JSON 路径一致）
+            request.algorithm = config.algorithm_explicit ? config.algorithm : "bb_dp";
         }
         // 防御性不变式（invalid_mode 路径保留；切片 1 恒不触发）
         if (request.mode != AlgorithmMode::direct && request.mode != AlgorithmMode::inventory)

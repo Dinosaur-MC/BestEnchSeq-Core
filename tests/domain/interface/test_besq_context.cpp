@@ -576,7 +576,7 @@ TEST_CASE("test_c_abi_solve_inventory") {
     expect(rc == 0, "c abi load_builtin");
 
     // Inventory mode with a real items array.  "algorithm" is omitted so the
-    // mode-dependent default (hamming) is exercised, and the items are parsed
+    // mode-dependent default (bb_dp) is exercised, and the items are parsed
     // and fed to the solver (previously the payload was always empty).
     const char* json_input =
         "{\"target\":{\"equipment\":\"diamond_sword\",\"enchantments\":[{\"id\":\"sharpness\",\"level\":5}]},"
@@ -596,8 +596,8 @@ TEST_CASE("test_c_abi_solve_inventory") {
     if (json_result) {
         std::string result(json_result);
         expect(result.find("\"success\": true") != std::string::npos, "c abi inventory solve should report success");
-        expect(result.find("\"algorithm\": \"hamming\"") != std::string::npos,
-               "c abi inventory solve should default to hamming");
+        expect(result.find("\"algorithm\": \"bb_dp\"") != std::string::npos,
+               "c abi inventory solve should default to bb_dp");
         expect(result.find("\"solutions\"") != std::string::npos, "c abi inventory solve returns solutions");
         besq_free_string(json_result);
     }
@@ -987,6 +987,9 @@ TEST_CASE("test_besq_abort_concurrent") {
     // Safety bound: if abort_solve() somehow fails to cancel, the executor's
     // timeout watcher cancels after this instead of running forever.
     request.search_config.max_search_time = std::chrono::milliseconds(1500);
+    // Keep the solve in-flight: 20 equal books are trivial for the weight-class
+    // fast path, so force the general (exponential) search.
+    request.search_config.extra["dp_merge.weight_class"] = "off";
 
     SolveResult result;
     std::string error;

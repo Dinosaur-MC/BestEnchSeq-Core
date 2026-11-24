@@ -52,7 +52,7 @@
 | `max_depth` | 0 | 最大递归/栈深度 | DFS（`plugins/dfs/DFSAlgorithm.cpp:246`） | no-op |
 | `memory_mb` | 0（A* 内 fallback 2048） | 开放/关闭集内存预算（MB） | AStar（`plugins/astar/AStarAlgorithm.cpp:183`） | no-op |
 | `max_threads` | 0 = `hardware_concurrency` | 线程池并发 | bb_dp（`BBDpAlgorithm.cpp:515`）、dp_merge（`DPMergeAlgorithm.cpp:329`） | 单线程策略（hamming；astar / dfs 插件）no-op |
-| `max_step_cost` | 39 | 每步铁砧成本上限（vanilla Too-Expensive=39），SOFT 约束 | bb_dp | no-op |
+| `max_step_cost` | 39 | 每步铁砧成本上限（vanilla Too-Expensive=39），SOFT 约束 | bb_dp；dp_merge 的权重类快速通道（§4c）用它在**同等最优成本**的方案中优先选每步 ≤cap 的（最优成本不变） | no-op |
 | `beam_width` | 0（精确） | Pareto 前沿束宽 | bb_dp | no-op |
 
 > `max_step_cost`/`beam_width` 当前无 CLI 入口，仅程序性设置（benchmark / 插件 / 默认值）。
@@ -66,7 +66,17 @@
 - **序列化**：count + (key,value) 长度前缀对，追加在 `SearchConfig` 末尾。**二进制布局变化 → checkpoint `FILE_VERSION` 2→3**（旧文件被干净拒绝）。
 - **CLI**：`--algo-opt key=value[,key=value]`（与 `--config` 分离——后者保持严格 forge 键校验；`--algo-opt` 只校验 key=value 形状，键归属由策略定义）。`--algo-opt` 值为任意字符串。
 - **附加式**：现有算法特有类型字段（`max_depth`/`memory_mb`/`max_threads`/`max_step_cost`/`beam_width`）**不迁移**，保留类型安全；`extra` 面向未来新增旋钮 / 插件私有配置。
-- 内置策略当前不消费 `extra`（各自旋钮已有类型字段）；插件与后续策略即插即用。
+- 内置策略消费的键：`dp_merge.weight_class` / `bb_dp.weight_class`（值 `off`/`0`/`false` 关闭权重类快速通道，见 §4c）；其余旋钮已有类型字段。插件与后续策略即插即用。
+
+## 4c. 权重类快速通道（dp_merge / bb_dp，2026-11 追加）
+
+direct 模式下若工作集是"一件装备 + 附魔互不重叠、互不冲突、均可附于装备的书"（`DefaultResolver` 的常规产出），
+dp_merge 与 bb_dp 先走 `components/WeightClassDp`：按书权重类的多重集做分割 DP，精确、与通用搜索同一最优解。
+
+- **语义**：dp_merge = 最小成本，同成本时优先每步 ≤ `max_step_cost`；bb_dp = 先求每步 ≤cap 的最便宜方案，无解再放开（与其 Pass A / Pass B 一致）。快速通道是精确解，`beam_width` / `initial_bound` 这两个提速旋钮对它不适用。
+- **回退**：形状不符（书目标、两书同附魔、冲突、不可附）、超出分割预算（单趟 6.4e7 次分割）、或重放校验不一致时，透明回退到原通用搜索。
+- **关闭**：`--algo-opt dp_merge.weight_class=off`（bb_dp 同理）；该键随 input 写入 checkpoint。
+- **诊断**：命中时 `dp_weight_classes`（权重类数）> 0，见 algorithm-diagnostics-spec §8。
 
 ## 5. CLI 映射与 help
 

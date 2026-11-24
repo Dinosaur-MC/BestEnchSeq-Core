@@ -40,5 +40,5 @@
       "priority": 10
     }
   ],
-  "algorithm": "hamming"
+  "algorithm": "bb_dp"
 }

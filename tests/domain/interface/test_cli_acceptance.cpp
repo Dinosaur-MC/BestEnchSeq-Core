@@ -412,7 +412,7 @@ TEST_CASE("test_inventory_solve_request_wiring") {
     ctx.load_builtin();
 
     // JSON with target → target_item populated from JSON, mode=inventory,
-    // default inventory algorithm (hamming).
+    // default inventory algorithm (bb_dp).
     {
         TempInvFile f(R"({
             "target": { "item": "diamond_sword", "enchants": [{"id":"sharpness","level":5}] },
@@ -427,7 +427,7 @@ TEST_CASE("test_inventory_solve_request_wiring") {
         auto* inv = std::get_if<InventoryPayload>(&req.payload);
         expect(inv != nullptr, "payload is an InventoryPayload");
         expect(inv && inv->extra_items.size() == 1, "one inventory item in payload");
-        expect(req.algorithm == "hamming", "default inventory algorithm is hamming");
+        expect(req.algorithm == "bb_dp", "default inventory algorithm is bb_dp");
         TEST_PASS("inventory wiring: JSON target → inventory request");
     }
 
@@ -981,13 +981,13 @@ TEST_CASE("cli_slice1_mode_inference") {
         expect(req.mode == AlgorithmMode::inventory, "item[ench] -> inventory");
     }
     {
-        // 单物品：也推断 inventory，且默认算法 hamming（与 --input JSON 路径一致）
+        // 单物品：也推断 inventory，且默认算法 bb_dp（与 --input JSON 路径一致）
         CLIApp::Config cfg;
         cfg.target = "diamond_sword[sharpness=5]";
         cfg.source = "diamond_sword";
         auto req = CLIApp::build_solve_request(cfg, ctx);
         expect(req.mode == AlgorithmMode::inventory, "single item -> inventory");
-        expect(req.algorithm == "hamming", "item-list inventory defaults to hamming");
+        expect(req.algorithm == "bb_dp", "item-list inventory defaults to bb_dp");
     }
     {
         // --input 自包含 + --source 拒绝

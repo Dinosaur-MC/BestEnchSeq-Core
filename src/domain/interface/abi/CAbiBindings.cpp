@@ -479,7 +479,7 @@ int besq_add_category(BesqContext* ctx, const char* name) {
 ///     "enchantments": [ {"id":"sharpness","level":5}, ... ]
 ///   },
 ///   "source": [ {"id":"sharpness","level":3}, ... ],
-///   "algorithm": "dp_merge",       // optional, default "dp_merge" / "hamming" (inventory)
+///   "algorithm": "dp_merge",       // optional, default "dp_merge" / "bb_dp" (inventory)
 ///   "platform": "java",
 ///   "max_solutions": 1,
 ///   "mode": "direct",              // or "inventory" (parses "items" array)
@@ -554,16 +554,16 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         }
         // ── Algorithm ─────────────────────────────────────────────────────
         // Canonical default mirrors the CLI: direct → "dp_merge",
-        // inventory → "hamming" (an inventory-capable strategy).  An omitted
+        // inventory → "bb_dp" (exact over a candidate pool).  An omitted
         // or empty "algorithm" field must never resolve to an unregistered
         // strategy.
         request.algorithm = (request.mode == AlgorithmMode::inventory)
-            ? "hamming" : "dp_merge";
+            ? "bb_dp" : "dp_merge";
         if (auto it = root.find("algorithm"); it != root.end())
             request.algorithm = it->second.as<std::string>();
         if (request.algorithm.empty())
             request.algorithm = (request.mode == AlgorithmMode::inventory)
-                ? "hamming" : "dp_merge";
+                ? "bb_dp" : "dp_merge";
 
         // ── Platform ──────────────────────────────────────────────────────
         std::string plat;

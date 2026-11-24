@@ -121,13 +121,17 @@ SSE event stream: `GET /api/tasks/{id}/events` (`progress` / `diag` / `completed
 | Strategy | Type | Optimality | Scale | Origin | Mechanism |
 |---|---|---|---|---|---|
 | `dp_merge` | Exact | Yes | ≤ 20 | Built-in (direct mode default) | Recursive partition DP + (EnchSet, PPN) Pareto buckets; checkpoint-resumable |
-| `bb_dp` | Exact | Yes | ≤ 24 | Built-in | Branch & bound + level-wise bottom-up DP, lazy StepTree |
-| `hamming` | Approx | No | Large | Built-in (inventory mode default) | Popcount-balanced merge tree, O(n log n) |
+| `bb_dp` | Exact | Yes | ≤ 24 | Built-in (inventory mode default) | Branch & bound + level-wise bottom-up DP, lazy StepTree; all-≤39 plans first |
+| `hamming` | Approx | No | Large | Built-in | Popcount-balanced merge tree, O(n log n) |
 | `astar` | Exact | Yes | ≤ 9 | Plugin | Admissible heuristic + priority queue |
 | `dfs` | Exact | Yes | ≤ 8 | Plugin | Branch & bound + hash memoization |
 | `idastar` | Exact | Yes | ≤ 10 | Plugin | Iterative deepening + transposition table |
 | `diff_first` | Approx | No | Any | Plugin | Cheapest pair per PPN layer |
 | `penalty_balance` | Approx | No | Any | Plugin | Merge closest penalty pairs |
+
+> In direct mode, `dp_merge` / `bb_dp` first try a **weight-class fast path** on the usual input shape (one equipment + mutually compatible single-enchant books): books of equal weight are interchangeable, so an exact DP over multisets usually finishes in milliseconds (~30 ms for the 24-enchant `large` case). The "Scale" column is the general search's limit; inputs the fast path does not cover fall back to it automatically. See [search-config-semantics.md §4c](docs/algotithm_designs/search-config-semantics.md).
+>
+> Inventory mode (`--input` / item list) defaults to `bb_dp`: an exact search over a candidate pool (the resolver's selection plus other relevant items, ≤ 14) that may leave items unused. On random inventories it averages ~20% cheaper than the former default `hamming` and solves inventories `hamming` reports as unsolvable. Selections above 16 items try `hamming` first and run the exact search only when it finds nothing. See [algorithm-design-discussion.md §12](docs/algotithm_designs/algorithm-design-discussion.md).
 
 New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
 

@@ -3,7 +3,9 @@
 #include "common/utils/thread/ThreadPool.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/components/WeightClassDp.h"
 #include "domain/algorithm/resolvers/IResolver.h"
+#include "domain/algorithm/resolvers/InventoryPoolResolver.h"
 #include <algorithm>
 #include <atomic>
 #include <bit>
@@ -31,7 +33,10 @@ void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
     // the previous insert only replaced an exact (ppn, type, enchset) match,
     // keeping dominated entries and bloating the frontier.)
     for (auto it = entries.begin(); it != entries.end();) {
-        if (it->item.type == item.type && it->item.enchs == item.enchs) {
+        // Same resulting item (type, durability, enchantments): future forge
+        // cost then depends only on ppn.  Durability matters in inventory mode
+        // (equipment + equipment repairs); in direct mode it is constant.
+        if (it->item.type == item.type && it->item.dur == item.dur && it->item.enchs == item.enchs) {
             if (it->ppn <= entry.ppn && it->cost <= entry.cost) {
                 ++dropped;  // candidate eliminated by Pareto domination
                 return;     // entry is dominated
@@ -297,6 +302,10 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
 
 // ─── Serialization support ─────────────────────────────────────────────────
 
+std::unique_ptr<IResolver> DPMergeAlgorithm::get_resolver() const noexcept {
+    return std::make_unique<InventoryPoolResolver>();
+}
+
 IAlgorithmSerializer *DPMergeAlgorithm::get_serializer() noexcept {
     if (!_serializer)
         _serializer = std::make_unique<DPMergeStateSerializer>();
@@ -363,6 +372,33 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         return;
     }
 
+    // Weight-class fast path: exact for the usual direct-mode shape (bare or
+    // sourced equipment + disjoint compatible books), polynomial in the number
+    // of distinct book weights.  Same optimum cost as the partition DP below;
+    // among equal-cost plans it prefers one with every step ≤ max_step_cost.
+    // Ineligible inputs (and SearchConfig.extra["dp_merge.weight_class"]=off)
+    // fall through to the general search.
+    if (WeightClassDp::enabled(input.config.search, name())) {
+        WeightClassDp::Options opt;
+        opt.objective     = WeightClassDp::Objective::MinCost;
+        opt.max_step_cost = input.config.search.max_step_cost;
+        auto fast = WeightClassDp::solve(items, input.target, input.registry, _forge_engine, opt, ctx);
+        if (fast.status == WeightClassDp::Status::Cancelled) {
+            _diag.status = "Cancelled";
+            ctx.set_exit_diagnostics(_diag);
+            ctx.report_progress(100, ProgressStatus::Cancelled);
+            return;
+        }
+        if (fast.status == WeightClassDp::Status::Solved) {
+            fast.fill_diagnostics(_diag);
+            _diag.status = "Complete";
+            ctx.set_exit_diagnostics(_diag);
+            ctx.report_solution(std::move(fast.steps));
+            ctx.report_progress(100, ProgressStatus::Complete);
+            return;
+        }
+    }
+
     std::vector<Item> mutable_items = items;
     canonicalize(mutable_items);
 
@@ -420,12 +456,36 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         return;
     }
 
+    // Direct mode must merge every resolver item (each gap book is needed), so
+    // only the full set can meet the target.  Inventory mode may leave kept
+    // items unused: any solved subset whose result meets the target is a
+    // complete plan, so scan them all (ascending mask order → deterministic
+    // tie-break).  Single items (empty history) are not plans.
     const ParetoEntry* best = nullptr;
-    for (const auto& entry : frontier.entries) {
-        if (meets_target(entry.item, _target)) {
-            if (!best || entry.cost < best->cost)
-                best = &entry;
+    auto consider = [&](const Frontier& f) {
+        for (const auto& entry : f.entries)
+            if (!entry.step_tree.empty() && meets_target(entry.item, _target))
+                if (!best || entry.cost < best->cost)
+                    best = &entry;
+    };
+    if (input.is_inventory()) {
+        if (_using_flat && _flat_cache) {
+            for (size_t i = 0; i < _flat_capacity; ++i)
+                if (const Frontier* fp = _flat_cache[i].load(std::memory_order_relaxed))
+                    consider(*fp);
+        } else {
+            std::vector<uint64_t> keys;
+            keys.reserve(_cache.size());
+            for (const auto& kv : _cache)
+                keys.push_back(kv.first);
+            std::sort(keys.begin(), keys.end());
+            for (uint64_t k : keys)
+                consider(*_cache.at(k));
+            for (const auto& f : _owners)  // map overflow arena
+                consider(*f);
         }
+    } else {
+        consider(frontier);
     }
 
     if (best) {

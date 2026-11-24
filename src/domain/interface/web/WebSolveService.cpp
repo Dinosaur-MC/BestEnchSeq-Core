@@ -86,10 +86,10 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
         req.payload = DirectPayload{build_source(dto.source)};
     }
 
-    // Mode-appropriate default (mirrors the C ABI): dp_merge is direct-only;
-    // hamming supports both modes. An empty algorithm in inventory mode MUST
-    // NOT resolve to dp_merge (it would throw unsupported_mode).
-    req.algorithm = dto.algorithm.empty() ? (inventory ? "hamming" : "dp_merge") : dto.algorithm;
+    // Mode-appropriate default (mirrors the CLI and C ABI): direct → dp_merge,
+    // inventory → bb_dp (exact over a candidate pool, ≤cap plans first; very
+    // large selections fall back to hamming inside bb_dp).
+    req.algorithm = dto.algorithm.empty() ? (inventory ? "bb_dp" : "dp_merge") : dto.algorithm;
     req.forge_config.platform = MCE::Java;
     // "允许不兼容" 接通（batch C）：wire 键 ignore_incompatible → ForgeConfig 的
     // ignore_imcompatible（内部拼写保留）。默认 false = 严格冲突。
@@ -149,7 +149,7 @@ WebSolveService::EventMeta WebSolveService::meta_from_dto(const WebTaskDto& dto)
     EventMeta meta;
     meta.target = dto_target_summary(dto.target);
     meta.mode = dto.items.empty() ? "direct" : "inventory";
-    meta.algorithm = dto.algorithm.empty() ? (meta.mode == "inventory" ? "hamming" : "dp_merge") : dto.algorithm;
+    meta.algorithm = dto.algorithm.empty() ? (meta.mode == "inventory" ? "bb_dp" : "dp_merge") : dto.algorithm;
     return meta;
 }
 

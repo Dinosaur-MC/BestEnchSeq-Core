@@ -89,6 +89,7 @@ struct PartitionDpDiagnostics : SearchDiagnostics {
     uint64_t dp_pareto_dropped{0};       // entries dropped by Pareto domination
     int32_t  dp_ub_cost{INT32_MAX};      // initial upper-bound cost (compute_ub)
     bool     dp_pass_b_ran{false};       // unconstrained Pass B ran; emitted only when true
+    uint32_t dp_weight_classes{0};       // weight-class fast path ran: number of classes; emitted only when > 0
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };

@@ -205,9 +205,9 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 | 策略 | 类型 | 最优性 | 适用规模 | 来源 | 核心机制 |
 |------|------|--------|---------|------|---------|
-| hamming | 近似 | 否 | 大量 | 内置（inventory 默认） | Popcount 平衡二叉合并树 |
+| hamming | 近似 | 否 | 大量 | 内置 | Popcount 平衡二叉合并树 |
 | dp_merge | 精确 | 是 | ≤ 20（超限 map 兜底） | 内置（direct 默认） | 分治 DP + (EnchSet, PPN) Pareto 分桶；checkpoint 可恢复 |
-| bb_dp | 精确 | 是 | ≤ 24 | 内置 | B&B 分治 DP + Pareto + 可选 39 级上限 |
+| bb_dp | 精确 | 是 | ≤ 24 | 内置（inventory 默认） | B&B 分治 DP + Pareto + 可选 39 级上限；库存模式在候选池上选最优子集 |
 | DFS | 精确 | 是 | ≤ 8 | 插件 | 迭代 B&B + 哈希记忆化 |
 | A* | 精确 | 是 | ≤ 9 | 插件 | 可采启发 + 优先队列 |
 | IDA* | 精确 | 是 | ≤ 10 | 插件 | 迭代加深 + TT 剪枝 |

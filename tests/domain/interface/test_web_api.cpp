@@ -811,7 +811,11 @@ void test_calculator(TestApp& app) {
         info.id = NSID("test:e_" + std::to_string(i));
         info.name = "E " + std::to_string(i);
         info.max_level = 5;
-        info.multiplier = 1;
+        // Distinct book weights (5·(i+1)): 18 weight classes put the task over
+        // the weight-class fast path's split budget, so dp_merge runs its
+        // general exponential search and the task stays Running (equal weights
+        // would be solved in milliseconds).
+        info.multiplier = 2 * (i + 1);
         info.supported_items.insert(NSID("#minecraft:swords"));
         expect(app.ctx.add_enchantment(info), "seed ench " + std::to_string(i));
     }
@@ -1560,7 +1564,11 @@ void test_stream_close_hook(TestApp& app) {
         info.id = NSID("test:hook_" + std::to_string(i));
         info.name = "Hook " + std::to_string(i);
         info.max_level = 5;
-        info.multiplier = 1;
+        // Distinct book weights (5·(i+1)): 18 weight classes put the task over
+        // the weight-class fast path's split budget, so dp_merge runs its
+        // general exponential search and the task stays Running (equal weights
+        // would be solved in milliseconds).
+        info.multiplier = 2 * (i + 1);
         info.supported_items.insert(NSID("#minecraft:swords"));
         expect(app.ctx.add_enchantment(info), "close-hook seed ench " + std::to_string(i));
     }
@@ -1855,7 +1863,9 @@ TEST_CASE("web_solve_shutdown_race") {
             info.id = NSID("test:e_" + std::to_string(i));
             info.name = "E " + std::to_string(i);
             info.max_level = 5;
-            info.multiplier = 1;
+            // Distinct book weights → over the weight-class fast path's budget
+            // (see test_calculator's heavy seed), so the task stays Running.
+            info.multiplier = 2 * (i + 1);
             info.supported_items.insert(NSID("#minecraft:swords"));
             expect(ctx.add_enchantment(info), "shutdown seed ench " + std::to_string(i));
         }

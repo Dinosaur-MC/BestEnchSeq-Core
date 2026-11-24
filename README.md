@@ -135,13 +135,17 @@ SSE 事件流：`GET /api/tasks/{id}/events`（`progress` / `diag` / `completed`
 | 策略 | 类型 | 最优性 | 规模 | 来源 | 机制 |
 |---|---|---|---|---|---|
 | `dp_merge` | 精确 | 是 | ≤ 20 | 内建（direct 模式默认） | 递归划分 DP + (EnchSet, PPN) Pareto 桶；支持 checkpoint 恢复 |
-| `bb_dp` | 精确 | 是 | ≤ 24 | 内建 | 分支定界 + 逐层自底向上 DP，惰性 StepTree |
-| `hamming` | 近似 | 否 | 大 | 内建（inventory 模式默认） | Popcount 均衡合并树，O(n log n) |
+| `bb_dp` | 精确 | 是 | ≤ 24 | 内建（inventory 模式默认） | 分支定界 + 逐层自底向上 DP，惰性 StepTree；先求每步 ≤39 的方案 |
+| `hamming` | 近似 | 否 | 大 | 内建 | Popcount 均衡合并树，O(n log n) |
 | `astar` | 精确 | 是 | ≤ 9 | 插件 | 可采纳启发式 + 优先队列 |
 | `dfs` | 精确 | 是 | ≤ 8 | 插件 | 分支定界 + 哈希记忆化 |
 | `idastar` | 精确 | 是 | ≤ 10 | 插件 | 迭代加深 + 置换表 |
 | `diff_first` | 近似 | 否 | 任意 | 插件 | PPN 层内最便宜对 |
 | `penalty_balance` | 近似 | 否 | 任意 | 插件 | 合并最接近惩罚对 |
+
+> `dp_merge` / `bb_dp` 在 direct 模式的常规输入（一件装备 + 互不冲突的单附魔书）上先走**权重类快速通道**：把同权重的书视为可互换，按多重集做 DP，精确且通常毫秒级（`large` 组 24 附魔约 30 ms）；上表"规模"是通用搜索的上限，快速通道不适用时自动回退。详见 [search-config-semantics.md §4c](docs/algotithm_designs/search-config-semantics.md)。
+>
+> 库存模式（`--input` / 物品列表）默认 `bb_dp`：在"解析器挑选 + 其余相关物品"组成的候选池（≤ 14 件）上精确搜索，可以不用完所有物品；随机库存实测平均比原默认 `hamming` 便宜约 20%，且能解出 `hamming` 报无解的库存。选中物品超过 16 件时先用 `hamming`，它无解再做精确搜索。详见 [algorithm-design-discussion.md §12](docs/algotithm_designs/algorithm-design-discussion.md)。
 
 新算法只需实现 `IAlgorithm::execute()` 即可获得线程管理、暂停/取消与进度上报。
 

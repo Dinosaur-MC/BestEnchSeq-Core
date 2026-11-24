@@ -56,6 +56,10 @@ void PartitionDpDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) c
     // default/disabled state and carries no information, so emit only on true.
     if (dp_pass_b_ran)
         out.push_back({"dp_pass_b_ran", 1});
+    // dp_weight_classes > 0 marks a run answered by the weight-class fast path
+    // (components/WeightClassDp); the general partition DP leaves it at 0.
+    if (dp_weight_classes > 0)
+        out.push_back({"dp_weight_classes", static_cast<int64_t>(dp_weight_classes)});
 }
 
 } // namespace algorithm

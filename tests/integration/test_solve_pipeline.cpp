@@ -4,14 +4,17 @@
 // The orchestration SolvePipeline's failure branches were only reachable
 // indirectly (via BesqContext::solve / the CLI).  These drive them directly:
 //   • unknown algorithm   → pipeline.err.unknown_algo throw
-//   • unsupported mode    → pipeline.err.unsupported_mode throw (dp_merge is
-//                           direct-only, hamming is direct|inventory)
+//   • unsupported mode    → "does not support" throw for a direct-only
+//                           strategy (every built-in now takes both modes, so a
+//                           stub stands in for the direct-only plugins)
 //   • unreachable target  → simulate()==false → empty result (success=false)
 // =============================================================================
 
 #define BESQ_TEST_MAIN
 
+#include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/types/ConfigTypes.h"
@@ -81,22 +84,36 @@ void test_unknown_algo() {
     TEST_PASS("solve pipeline: unknown algorithm");
 }
 
+/// Direct-only strategy (like the astar / dfs / idastar plugins).  Every
+/// built-in strategy now accepts both modes, so the mode gate is driven with
+/// this stub through the executor (the same check SolvePipeline makes on
+/// loader-created executors).
+class DirectOnlyStub : public algorithm::IAlgorithm {
+public:
+    std::string_view name() const noexcept override { return "direct_only_stub"; }
+    std::string_view version() const noexcept override { return "1.0.0"; }
+    double evaluate(int16_t) const noexcept override { return 0; }
+    std::unique_ptr<algorithm::IForgeEngine> get_forge_engine() const noexcept override {
+        return std::make_unique<algorithm::ForgeEngine>();
+    }
+    AlgorithmMode supported_mode() const noexcept override { return AlgorithmMode::direct; }
+    void execute(const algorithm::AlgorithmInput&, algorithm::ExecutionContext&) override {}
+};
+
 void test_unsupported_mode() {
-    auto profile = make_builtin_profile();
-    algorithm::AlgorithmLoader loader;
-    loader.load_builtin();
-    // dp_merge is direct-only → inventory request must be rejected.
-    auto req = direct_request(profile, "diamond_sword[sharpness=3]", "dp_merge");
-    req.mode = AlgorithmMode::inventory;
-    req.payload = InventoryPayload{};
+    algorithm::AlgorithmExecutor executor(std::make_unique<DirectOnlyStub>());
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.data = algorithm::InventoryPayload{};
 
     bool threw = false;
     try {
-        run_solve(profile, req, loader);
+        executor.start(std::move(input));
     } catch (const std::runtime_error& e) {
         threw = std::string(e.what()).find("does not support") != std::string::npos;
     }
-    expect(threw, "dp_merge + inventory mode throws pipeline.err.unsupported_mode");
+    expect(threw, "direct-only strategy + inventory mode throws 'does not support'");
+    expect(executor.state() == algorithm::AlgorithmState::Idle, "rejected start leaves the executor Idle");
     TEST_PASS("solve pipeline: unsupported mode");
 }
 
@@ -151,6 +168,8 @@ void test_resume_from_checkpoint() {
     input.data = algorithm::DirectPayload{};
     input.target.type = algorithm::ItemType::Equip;
     input.target.enchs.insert(algorithm::Ench{0, 5});
+    // Populate the general DP's memo cache (the fast path would leave it empty).
+    input.config.search.extra["dp_merge.weight_class"] = "off";
     algorithm::ExecutionContext ctx(0, "dp_merge");
     algo.init(input, ctx);
     algo.execute(input, ctx);
@@ -231,6 +250,9 @@ void test_save_solve_state_roundtrip() {
     request.search_config.max_solutions = 4;
     // 安全上限：若 pause/save 失败，求解不能无限跑（框架 per-case 超时兜底）。
     request.search_config.max_search_time = std::chrono::milliseconds(30000);
+    // 暂停/存档测的是通用分割 DP 的 memo 状态；同权重书会被权重类快速通道
+    // 毫秒级解完（无暂停窗口），故显式关闭（该开关随 input 写入 checkpoint）。
+    request.search_config.extra["dp_merge.weight_class"] = "off";
 
     const std::string ck_path = (std::filesystem::temp_directory_path() / "besq_ckpt_roundtrip.ckpt").string();
     std::error_code ec;

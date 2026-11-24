@@ -2,7 +2,10 @@
 #include "common/utils/thread/ThreadPool.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
+#include "domain/algorithm/components/WeightClassDp.h"
 #include "domain/algorithm/resolvers/IResolver.h"
+#include "domain/algorithm/resolvers/InventoryPoolResolver.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -16,6 +19,10 @@ namespace algorithm {
 
 using namespace algorithm;
 
+std::unique_ptr<IResolver> BBDpAlgorithm::get_resolver() const noexcept {
+    return std::make_unique<InventoryPoolResolver>();
+}
+
 // ─── Frontier::insert (Pareto domination + optional beam) ────────────────
 
 BBDpAlgorithm::ParetoEntry* BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
@@ -27,7 +34,9 @@ BBDpAlgorithm::ParetoEntry* BBDpAlgorithm::Frontier::insert(ParetoEntry entry, i
     // Future merge cost depends only on (type, enchset, ppn), so the dominated
     // entry can never lead to a strictly better result.
     for (auto it = entries.begin(); it != entries.end();) {
-        if (it->item.type == item.type && it->item.enchs == item.enchs) {
+        // Durability is part of the item identity: equipment + equipment
+        // repairs (inventory mode) make it affect future cost.
+        if (it->item.type == item.type && it->item.dur == item.dur && it->item.enchs == item.enchs) {
             if (it->ppn <= entry.ppn && it->cost <= entry.cost) {
                 ++dropped;  // candidate eliminated by Pareto domination
                 return nullptr;  // entry is dominated
@@ -414,7 +423,10 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
     // barrier-parallel_for per layer (no nesting, no shared result mutex).
     for (size_t k = 2; k <= n; ++k) {
         auto& layer = masks_by_size[k];
-        const bool final_layer = (k == n) && final_level;
+        // A target-meeting result is a complete plan (may tighten the bound)
+        // only for the full set in direct mode; in inventory mode any subset
+        // is a valid plan, so every layer may tighten it.
+        const bool final_layer = (k == n || _inventory) && final_level;
         auto body = [&](size_t idx) {
             ctx.wait_if_paused();
             if (ctx.is_cancelled()) return;
@@ -515,6 +527,7 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
         besq::ThreadPool::set_concurrency(input.config.search.max_threads);
 
     ctx.report_progress(0, ProgressStatus::Starting);
+    _inventory = input.is_inventory();
 
     auto items = get_resolver()->resolve(input);
     normalize_base_equipment(items);
@@ -537,6 +550,49 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
         _diag.status = "CompleteNoSolution";
         ctx.set_exit_diagnostics(_diag);
         return;
+    }
+
+    // Weight-class fast path (components/WeightClassDp): exact for the usual
+    // direct-mode shape, with the same soft-cap semantics as Pass A / Pass B
+    // below (cheapest all-≤cap plan, else the unconstrained optimum).  It is
+    // exact, so beam_width / initial_bound (speed knobs for the search below)
+    // do not apply.  Ineligible inputs (and
+    // SearchConfig.extra["bb_dp.weight_class"]=off) fall through.
+    if (WeightClassDp::enabled(input.config.search, name())) {
+        WeightClassDp::Options opt;
+        opt.objective     = WeightClassDp::Objective::CapFirst;
+        opt.max_step_cost = input.config.search.max_step_cost;
+        auto fast = WeightClassDp::solve(items, input.target, input.registry, _forge_engine, opt, ctx);
+        if (fast.status == WeightClassDp::Status::Cancelled) {
+            _diag.status = "Cancelled";
+            ctx.set_exit_diagnostics(_diag);
+            ctx.report_progress(100, ProgressStatus::Cancelled);
+            return;
+        }
+        if (fast.status == WeightClassDp::Status::Solved) {
+            fast.fill_diagnostics(_diag);
+            _diag.status = "Complete";
+            ctx.set_exit_diagnostics(_diag);
+            ctx.report_solution(std::move(fast.steps));
+            ctx.report_progress(100, ProgressStatus::Complete);
+            return;
+        }
+    }
+
+    // Inventory working sets this large are rare (e.g. many low-level books
+    // combined for one enchant) and can take the exact search seconds to
+    // minutes.  Try the hamming construction first — the previous inventory
+    // default, so bb_dp is never slower or worse than it was — and only when it
+    // finds no plan fall through to the exact search below (bounded by
+    // max_search_time).  hamming reports its own progress on ctx, so a failed
+    // attempt shows a "no solution" progress frame before the search resumes.
+    if (_inventory && items.size() > kInventoryExactMax) {
+        HammingAlgorithm fallback;
+        fallback.init(input, ctx);
+        fallback.execute(input, ctx);
+        if (!ctx.get_solutions().empty() || ctx.is_cancelled())
+            return;
+        ctx.report_progress(0, ProgressStatus::Starting);
     }
 
     const int32_t cap        = input.config.search.max_step_cost;
@@ -605,12 +661,35 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
         }
     };
 
-    auto find_best = [&](const Frontier& f) -> const ParetoEntry* {
+    // Direct mode: only the full set can meet the target.  Inventory mode: any
+    // solved subset whose result meets the target is a plan — scan them all in
+    // ascending mask order (deterministic tie-break); single items (empty
+    // history) are not plans.
+    auto find_best = [&](const Frontier& full) -> const ParetoEntry* {
         const ParetoEntry* best = nullptr;
-        for (const auto& e : f.entries)
-            if (meets_target(e.item, _target))
-                if (!best || e.cost < best->cost)
-                    best = &e;
+        auto consider = [&](const Frontier& f) {
+            for (const auto& e : f.entries)
+                if (!e.step_tree.empty() && meets_target(e.item, _target))
+                    if (!best || e.cost < best->cost)
+                        best = &e;
+        };
+        if (!_inventory) {
+            consider(full);
+        } else if (_using_flat && _flat_cache) {
+            for (size_t i = 0; i < _flat_capacity; ++i)
+                if (const Frontier* fp = _flat_cache[i].load(std::memory_order_relaxed))
+                    consider(*fp);
+        } else {
+            std::vector<uint64_t> keys;
+            keys.reserve(_cache.size());
+            for (const auto& kv : _cache)
+                keys.push_back(kv.first);
+            std::sort(keys.begin(), keys.end());
+            for (uint64_t k : keys)
+                consider(*_cache.at(k));
+            for (const auto& f : _overflow)
+                consider(*f);
+        }
         return best;
     };
 

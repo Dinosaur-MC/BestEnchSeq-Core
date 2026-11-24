@@ -95,6 +95,10 @@ besq_test_with_plugins(test_algorithm_strategies test_algorithm_strategies.cpp
 
 # dp_merge 正确性：与 bb_dp 精确解最优值等价（守卫 Pareto 剪枝/双缓存）
 besq_test(test_dp_merge_correctness test_dp_merge_correctness.cpp)
+# 权重类快速通道（dp_merge / bb_dp direct 模式）：与通用分割 DP 最优值等价 + 方案可重放
+besq_test(test_weight_class_dp test_weight_class_dp.cpp)
+# 库存模式精确策略（dp_merge / bb_dp）：与 hamming / 解析器挑选对照 + 方案可重放 + 物品池契约
+besq_test(test_inventory_exact test_inventory_exact.cpp)
 
 # 搜索构件（Heuristic / ItemPool / SearchUtils）直接测试
 besq_test(test_search_components test_search_components.cpp)

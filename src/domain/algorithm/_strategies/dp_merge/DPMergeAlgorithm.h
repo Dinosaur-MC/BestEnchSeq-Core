@@ -48,14 +48,19 @@ public:
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<ForgeEngine>(_forge_engine);
     }
+    /// direct: merge every resolver item.  inventory: exact over the
+    /// resolver-kept items, choosing the cheapest subset that meets the target.
     AlgorithmMode supported_mode() const noexcept override {
-        return AlgorithmMode::direct;
+        return AlgorithmMode::direct | AlgorithmMode::inventory;
     }
 
     // ── Serialization support ─────────────────────────────────────────
     void init(const AlgorithmInput &input, const ExecutionContext &ctx) override;
     IAlgorithmSerializer *get_serializer() noexcept override;
     const IAlgorithmSerializer *get_serializer() const noexcept override;
+    /// Inventory mode searches a wider candidate pool (InventoryPoolResolver);
+    /// direct mode is unchanged (DefaultResolver).
+    std::unique_ptr<IResolver> get_resolver() const noexcept override;
     bool is_resumable() const noexcept override { return true; }
 
     friend class DPMergeStateSerializer;

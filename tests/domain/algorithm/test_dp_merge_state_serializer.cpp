@@ -124,6 +124,9 @@ AlgorithmInput run_small_solve(DPMergeAlgorithm& algo) {
     input.target.type = ItemType::Equip;
     input.target.enchs.insert(Ench{0, 5});
     input.target.enchs.insert(Ench{1, 2});
+    // Exercise the general DP so its memo cache is populated (the weight-class
+    // fast path answers this shape without touching the cache).
+    input.config.search.extra["dp_merge.weight_class"] = "off";
 
     ExecutionContext ctx(0, "dp_merge");
     algo.init(input, ctx);

@@ -41,8 +41,11 @@ namespace algorithm {
 ///      (B=1 ≈ greedy DP, B=0 = exact).
 ///
 /// Worst-case complexity is exponential (Catalan partitions), but bound +
-/// cap + Pareto pruning collapse the space dramatically for N ≤ 24.  Direct
-/// mode only (inventory mode is future work).
+/// cap + Pareto pruning collapse the space dramatically for N ≤ 24.
+///
+/// Inventory mode: exact over the resolver-kept items; the plan may leave kept
+/// items unused (the cheapest target-meeting subset wins), and every layer may
+/// tighten the bound since any such subset is a complete plan.
 class BBDpAlgorithm : public IAlgorithm {
 public:
     explicit BBDpAlgorithm(ForgeConfig cfg = {}) noexcept
@@ -56,8 +59,17 @@ public:
         return std::make_unique<ForgeEngine>(_forge_engine);
     }
     AlgorithmMode supported_mode() const noexcept override {
-        return AlgorithmMode::direct;
+        return AlgorithmMode::direct | AlgorithmMode::inventory;
     }
+    /// Inventory mode searches a wider candidate pool (InventoryPoolResolver);
+    /// direct mode is unchanged (DefaultResolver).
+    std::unique_ptr<IResolver> get_resolver() const noexcept override;
+
+    /// Inventory working sets above this size try the hamming construction
+    /// first and run the exact search only when it finds no plan (reachable
+    /// only when DefaultResolver's own selection exceeds
+    /// InventoryPoolResolver::kPoolMax).
+    static constexpr size_t kInventoryExactMax = 16;
 
 private:
     struct ParetoEntry {
@@ -91,6 +103,7 @@ private:
     ForgeEngine _forge_engine;
     const EnchReg *_ench_reg{nullptr};
     Item _target;  // full solve target (type + enchantments)
+    bool _inventory{false};  // inventory mode: any target-meeting subset is a plan
 
     // Base items in canonical order — every recursive subproblem is a subset
     // of this array, identified by a bitmask (see `_cache` key).

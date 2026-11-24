@@ -156,6 +156,7 @@ struct PartitionDpDiagnostics : SearchDiagnostics {
     uint64_t dp_pareto_dropped{0};        // Tier 1: 被 Pareto 支配剪掉的条目数
     int32_t  dp_ub_cost{INT32_MAX};       // Tier 0: 初始上界成本（compute_ub 结果）
     bool     dp_pass_b_ran{false};        // Tier 0: 是否运行了无约束 Pass B
+    uint32_t dp_weight_classes{0};        // Tier 0: 权重类快速通道命中时的权重类数（0 = 走通用搜索）
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override {
         SearchDiagnostics::flush(out);    // 必须先调父类
@@ -170,11 +171,15 @@ struct PartitionDpDiagnostics : SearchDiagnostics {
         // 仅在实际运行 Pass B 时上报；默认 false（未运行）省略
         if (dp_pass_b_ran)
             out.push_back({"dp_pass_b_ran", 1});
+        // 仅在权重类快速通道命中时上报；0（走通用搜索）省略
+        if (dp_weight_classes > 0)
+            out.push_back({"dp_weight_classes", static_cast<int64_t>(dp_weight_classes)});
     }
 ```
 
 > **省略语义（v1 字段不变，仅输出规则收窄）**：`solutions_found` / `max_depth` 用
 > `-1` 哨兵表示"未跟踪"，仅在上报（≥0）时输出；`dp_pass_b_ran` 默认未运行省略；
+> `dp_weight_classes` 为 0（未走快速通道）时省略，命中时 `dp_cache_slots` = 多重集状态数、`dp_subproblems_solved` = 非空前沿状态数；
 > `nodes_visited` / `nodes_pruned` / `steps_forged`（Tier-2 计数器，默认构建编译为空、
 > 恒 0）三者全 0 时整组省略。字段名与 §7 schema 版本不变。
 };

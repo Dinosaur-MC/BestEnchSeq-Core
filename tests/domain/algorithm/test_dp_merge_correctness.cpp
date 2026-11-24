@@ -121,6 +121,10 @@ int32_t run_algo(std::unique_ptr<algorithm::IAlgorithm> algo,
     input.config.mode = AlgorithmMode::direct;
     if (max_solutions > 0)
         input.config.search.max_solutions = max_solutions;
+    // Compare the two independent general searches; the shared weight-class
+    // fast path is covered by test_weight_class_dp.
+    input.config.search.extra["dp_merge.weight_class"] = "off";
+    input.config.search.extra["bb_dp.weight_class"] = "off";
     input.registry = reg;
     input.target = target;
     input.data = algorithm::DirectPayload{source};

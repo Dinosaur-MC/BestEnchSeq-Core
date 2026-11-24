@@ -46,9 +46,11 @@ struct SearchConfig : IBinarySerializable {
     /// hamming) ignore it.
     uint32_t max_threads = 0;
 
-    /// bb_dp-only: per-step anvil cost cap (vanilla Too-Expensive threshold =
-    /// 39). 0 = disabled. SOFT constraint — bb_dp first tries for a solution
-    /// where every step ≤ max_step_cost, then relaxes if none exists.
+    /// bb_dp: per-step anvil cost cap (vanilla Too-Expensive threshold = 39).
+    /// 0 = disabled. SOFT constraint — bb_dp first tries for a solution where
+    /// every step ≤ max_step_cost, then relaxes if none exists.  dp_merge's
+    /// weight-class fast path uses it only as a tie-break (among optimal-cost
+    /// plans, prefer one with every step ≤ cap); the optimum never changes.
     int32_t max_step_cost = 39;
     /// bb_dp-only: Pareto-frontier beam width. 0 = exact (unlimited frontier).
     int32_t beam_width = 0;
@@ -60,7 +62,9 @@ struct SearchConfig : IBinarySerializable {
     /// whole map.  Values are raw strings the owning strategy parses itself.
     /// std::map keeps keys sorted → deterministic binary serialization (stable
     /// checkpoint CRC).  Empty by default; adding a key here never changes
-    /// existing typed-field semantics.
+    /// existing typed-field semantics.  Built-in keys:
+    /// "dp_merge.weight_class" / "bb_dp.weight_class" = off|0|false disables
+    /// the weight-class fast path (components/WeightClassDp.h).
     std::map<std::string, std::string> extra;
 
     void serialize(ByteStreamWriter &w) const noexcept override {

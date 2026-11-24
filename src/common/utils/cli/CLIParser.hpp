@@ -73,16 +73,12 @@ int find_command_by_name(const std::tuple<Entries...>& tup, std::string_view nam
     return r;
 }
 
+// 直接折叠类型包：旧写法（index_sequence 泛型 lambda 内嵌 lambda、包只出现在
+// `using ET = tuple_element_t<Is, ...>` 里）会让 clang 18.1.x 在推导 lambda
+// 返回类型时 ICE（collectUnexpandedParameterPacks 段错误，Release CI 复现）。
 template<typename... Entries>
-bool has_commands(const std::tuple<Entries...>& tup) noexcept {
-    bool r = false;
-    [&]<size_t... Is>(std::index_sequence<Is...>) {
-        (([&]{
-            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-            if constexpr (is_command<ET>::value) r = true;
-        }()), ...);
-    }(std::index_sequence_for<Entries...>{});
-    return r;
+constexpr bool has_commands(const std::tuple<Entries...>&) noexcept {
+    return (is_command<Entries>::value || ...);
 }
 
 template<typename... Entries>
